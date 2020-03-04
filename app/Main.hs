@@ -1,23 +1,25 @@
-{-# LANGUAGE NamedFieldPuns        #-}
-{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module Main where
 
-import           Control.Lens
-import           Control.Monad
-import           Data.Aeson                 as A
-import           Data.Aeson.Lens
-import           Development.Shake
-import           Development.Shake.Classes
-import           Development.Shake.Forward
-import           Development.Shake.FilePath
-import           GHC.Generics               (Generic)
-import           Slick
-
+import Control.Lens
+import Control.Monad
+import Data.Aeson as A
+import Data.Aeson.Lens
 import qualified Data.HashMap.Lazy as HML
-import qualified Data.Text                  as T
+import qualified Data.Text as T
+import Data.Time
+import Development.Shake
+import Development.Shake.Classes
+import Development.Shake.FilePath
+import Development.Shake.Forward
+import GHC.Generics (Generic)
+import Slick
 
 ---Config-----------------------------------------------------------------------
 
@@ -104,12 +106,43 @@ copyStaticFiles = do
     void $ forP filepaths $ \filepath ->
         copyFileChanged ("site" </> filepath) (outputFolder </> filepath)
 
+rfc3339 :: Maybe String
+rfc3339 = Just "%H:%M:%SZ"
+
+toIsoDate :: UTCTime -> String
+toIsoDate = formatTime defaultTimeLocale (iso8601DateFormat rfc3339)
+
+buildFeed :: [Post] -> Action ()
+buildFeed posts = do
+  now <- liftIO getCurrentTime
+  let atomData =
+        AtomData
+          { title = siteTitle siteMeta
+          , domain = baseUrl siteMeta
+          , author = siteAuthor siteMeta
+          , posts = posts
+          , currentTime = toIsoDate now
+          , url = "/atom.xml"
+          }
+  atomTempl <- compileTemplate' "site/templates/atom.xml"
+  writeFile' (outputFolder </> "atom.xml") . T.unpack $ substitute atomTempl (toJSON atomData)
+
+data AtomData = AtomData
+  { title :: String
+  , domain :: String
+  , author :: String
+  , posts :: [Post]
+  , currentTime :: String
+  , url :: String
+  } deriving (Generic, Eq, Ord, Show, ToJSON)
+
 -- | Specific build rules for the Shake system
 --   defines workflow to build the website
 buildRules :: Action ()
 buildRules = do
   allPosts <- buildPosts
   buildIndex allPosts
+  buildFeed allPosts
   copyStaticFiles
 
 main :: IO ()

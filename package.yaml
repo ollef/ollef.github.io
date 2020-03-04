@@ -25,12 +25,13 @@ executables:
     - -with-rtsopts=-N
     - -Wall
     dependencies:
+    - aeson
     - base >= 4.7 && < 5
+    - containers
+    - lens
+    - lens-aeson
     - shake
     - slick
     - text
-    - containers
+    - time
     - unordered-containers
-    - lens
-    - aeson
-    - lens-aeson
