@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+    <title>Olle Fredriksson</title>
+    <link href="/atom.xml" rel="self" type="application/rss+xml" />
+  <updated>2020-03-04T23:20:28Z</updated>
+  <author>
+      <name>Olle Fredriksson</name>
+  </author>
+  <id>https://ollef.github.io/blog/</id>
+
+  <entry>
+      <title>Olle Fredriksson</title>
+      <link href="posts/sample-post.html"/>
+      <id>https://ollef.github.io/blog/posts/sample-post.html</id>
+      <updated>2020-03-04</updated>
+      <summary></summary>
+      <content type="html"><![CDATA[
+          <img src="/images/code.jpg" alt="Sample Post">
+              <p>Welcome to your first blog post!</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb1-1"><a href="#cb1-1"></a><span class="ot">haskell ::</span> <span class="dt">Lol</span></span>
+<span id="cb1-2"><a href="#cb1-2"></a>haskell <span class="ot">=</span> <span class="dt">Code</span></span></code></pre></div>
+      ]]></content>
+      </entry>
+  <entry>
+      <title>Olle Fredriksson</title>
+      <link href="posts/sample-post3.html"/>
+      <id>https://ollef.github.io/blog/posts/sample-post3.html</id>
+      <updated>2020-03-03</updated>
+      <summary></summary>
+      <content type="html"><![CDATA[
+          <img src="/images/code.jpg" alt="Sample Post 3">
+              <p>Welcome to your second blog post!</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb1-1"><a href="#cb1-1"></a><span class="ot">haskell ::</span> <span class="dt">Lol</span></span>
+<span id="cb1-2"><a href="#cb1-2"></a>haskell <span class="ot">=</span> <span class="dt">Code</span></span></code></pre></div>
+      ]]></content>
+      </entry>
+  <entry>
+      <title>Olle Fredriksson</title>
+      <link href="posts/sample-post2.html"/>
+      <id>https://ollef.github.io/blog/posts/sample-post2.html</id>
+      <updated>2020-03-01</updated>
+      <summary></summary>
+      <content type="html"><![CDATA[
+          <img src="/images/code.jpg" alt="Um Sample Post 2">
+              <p>Welcome to your second blog post!</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb1-1"><a href="#cb1-1"></a><span class="ot">haskell ::</span> <span class="dt">Lol</span></span>
+<span id="cb1-2"><a href="#cb1-2"></a>haskell <span class="ot">=</span> <span class="dt">Code</span></span></code></pre></div>
+      ]]></content>
+      </entry>
+</feed>
