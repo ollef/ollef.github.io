@@ -1,8 +1,7 @@
 ---
 title: "Um Sample Post 2"
 author: Olle Fredriksson
-date: March 3, 2020
-tags: [sixten, compiler, haskell]
+date: 2020-03-01
 description: My first blog post using slick
 image: code.jpg
 ---

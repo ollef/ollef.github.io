@@ -12,6 +12,8 @@ import Control.Monad
 import Data.Aeson as A
 import Data.Aeson.Lens
 import qualified Data.HashMap.Lazy as HML
+import Data.List
+import Data.Ord
 import qualified Data.Text as T
 import Data.Time
 import Development.Shake
@@ -81,7 +83,7 @@ buildIndex posts' = do
 buildPosts :: Action [Post]
 buildPosts = do
   pPaths <- getDirectoryFiles "." ["site/posts//*.md"]
-  forP pPaths buildPost
+  sortBy (flip $ comparing date) <$> forP pPaths buildPost
 
 -- | Load a post, process metadata, write it to output, then return the post object
 -- Detects changes to either post content or template
@@ -117,21 +119,15 @@ buildFeed posts = do
   now <- liftIO getCurrentTime
   let atomData =
         AtomData
-          { title = siteTitle siteMeta
-          , domain = baseUrl siteMeta
-          , author = siteAuthor siteMeta
-          , posts = posts
+          { posts = posts
           , currentTime = toIsoDate now
           , url = "/atom.xml"
           }
   atomTempl <- compileTemplate' "site/templates/atom.xml"
-  writeFile' (outputFolder </> "atom.xml") . T.unpack $ substitute atomTempl (toJSON atomData)
+  writeFile' (outputFolder </> "atom.xml") . T.unpack $ substitute atomTempl (withSiteMeta $ toJSON atomData)
 
 data AtomData = AtomData
-  { title :: String
-  , domain :: String
-  , author :: String
-  , posts :: [Post]
+  { posts :: [Post]
   , currentTime :: String
   , url :: String
   } deriving (Generic, Eq, Ord, Show, ToJSON)

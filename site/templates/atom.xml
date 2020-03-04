@@ -1,19 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom">
-    <title>{{title}}</title>
+    <title>{{siteTitle}}</title>
     <link href="{{domain}}{{url}}" rel="self" type="application/rss+xml" />
   <updated>{{currentTime}}</updated>
   <author>
-      <name>{{author}}</name>
+      <name>{{siteAuthor}}</name>
   </author>
-  <id>{{domain}}/</id>
+  <id>{{baseUrl}}/</id>
 
   {{#posts}}
   <entry>
-      <title>{{title}}</title>
+      <title>{{siteTitle}}</title>
       <link href="{{domain}}{{url}}"/>
-      <id>{{domain}}{{url}}</id>
-      <updated>{{isoDate}}</updated>
+      <id>{{baseUrl}}/{{url}}</id>
+      <updated>{{date}}</updated>
       {{#category}}
       <category term="{{.}}"/>
       {{/category}}

@@ -1,8 +1,7 @@
 ---
 title: "Sample Post"
 author: Olle Fredriksson
-date: March 4, 2020
-tags: [sixten, compiler, haskell]
+date: 2020-03-04
 description: My first blog post using slick
 image: code.jpg
 ---
