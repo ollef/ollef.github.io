@@ -1,9 +1,24 @@
 <footer>
+    <div class="social-links">
+        {{#githubUser}}
+        <div class="social-link-wrapper">
+            <a class="social-link" href="https://github.com/{{githubUser}}">
+                <img src="/images/github-logo.svg" alt="Github profile"/>
+            </a>
+        </div>
+        {{/githubUser}}
+        {{#twitterHandle}}
+        <div class="social-link-wrapper">
+            <a class="social-link" href="https://twitter.com/{{twitterHandle}}">
+                <img src="/images/twitter-logo.svg" alt="Twitter profile"/>
+            </a>
+        </div>
+        {{/twitterHandle}}
+    </div>
     Built with Haskell using <a href="https://github.com/ChrisPenner/slick">slick</a> ❤️
 </footer>
 
-<link href='https://fonts.googleapis.com/css?family=Quicksand:300,400' rel='stylesheet' type='text/css'>
-<link href='https://fonts.googleapis.com/css?family=Oswald' rel='stylesheet' type='text/css'>
+<link href='https://fonts.googleapis.com/css?family=Alegreya:300,400' rel='stylesheet' type='text/css'>
 <script src="/js/main.js"></script>
 </body>
 </html>
