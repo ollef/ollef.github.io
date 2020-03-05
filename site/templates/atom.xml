@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom">
     <title>{{siteTitle}}</title>
-    <link href="{{domain}}{{url}}" rel="self" type="application/rss+xml" />
+    <link href="{{baseUrl}}/{{url}}" rel="self" type="application/rss+xml" />
   <updated>{{currentTime}}</updated>
   <author>
       <name>{{siteAuthor}}</name>
@@ -11,7 +11,7 @@
   {{#posts}}
   <entry>
       <title>{{siteTitle}}</title>
-      <link href="{{domain}}{{url}}"/>
+      <link href="{{baseUrl}}/{{url}}"/>
       <id>{{baseUrl}}/{{url}}</id>
       <updated>{{date}}</updated>
       {{#category}}
@@ -20,7 +20,7 @@
       <summary>{{description}}</summary>
       <content type="html"><![CDATA[
           {{#image}}
-          <img src="{{domain}}/images/{{{image}}}" alt="{{title}}">
+          <img src="{{baseUrl}}/images/{{{image}}}" alt="{{title}}">
               {{/image}}
               {{{content}}}
       ]]></content>

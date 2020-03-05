@@ -29,6 +29,7 @@ siteMeta :: SiteMeta
 siteMeta =
     SiteMeta { siteAuthor = "Olle Fredriksson"
              , baseUrl = "https://ollef.github.io/blog"
+             , basePath = "/blog"
              , siteTitle = "Olle Fredriksson"
              , twitterHandle = Just "ollfredo"
              , githubUser = Just "ollef"
@@ -53,9 +54,10 @@ withSiteMeta _ = error "only add site meta to objects"
 
 data SiteMeta =
     SiteMeta { siteAuthor    :: String
-             , baseUrl       :: String -- e.g. https://example.ca
+             , baseUrl       :: String
+             , basePath      :: String
              , siteTitle     :: String
-             , twitterHandle :: Maybe String -- Without @
+             , twitterHandle :: Maybe String
              , githubUser    :: Maybe String
              }
     deriving (Generic, Eq, Ord, Show, ToJSON)
@@ -128,7 +130,7 @@ buildFeed posts = do
         AtomData
           { posts = posts
           , currentTime = toIsoDate now
-          , url = "/atom.xml"
+          , url = "atom.xml"
           }
   atomTempl <- compileTemplate' "site/templates/atom.xml"
   writeFile' (outputFolder </> "atom.xml") . T.unpack $ substitute atomTempl (withSiteMeta $ toJSON atomData)

@@ -3,23 +3,23 @@
         {{#githubUser}}
         <div class="social-link-wrapper">
             <a class="social-link" href="https://github.com/{{githubUser}}">
-                <img src="/blog/images/github-logo.svg" alt="Github profile"/>
+                <img src="{{basePath}}/images/github-logo.svg" alt="Github profile"/>
             </a>
         </div>
         {{/githubUser}}
         {{#twitterHandle}}
         <div class="social-link-wrapper">
             <a class="social-link" href="https://twitter.com/{{twitterHandle}}">
-                <img src="/blog/images/twitter-logo.svg" alt="Twitter profile"/>
+                <img src="{{basePath}}/images/twitter-logo.svg" alt="Twitter profile"/>
             </a>
         </div>
         {{/twitterHandle}}
     </div>
-    <div id="copyright">&copy; 2020 <a href="mailto:fredriksson.olle@gmail.com">Olle Fredriksson</a> — <a href="/blog/atom.xml">Feed</a></div>
+    <div id="copyright">&copy; 2020 <a href="mailto:fredriksson.olle@gmail.com">Olle Fredriksson</a> — <a href="{{basePath}}/atom.xml">Feed</a></div>
 
     Built using <a href="https://github.com/ChrisPenner/slick">slick</a> ❤️
 </footer>
 
-<script src="/blog/js/main.js"></script>
+<script src="{{basePath}}/js/main.js"></script>
 </body>
 </html>

@@ -7,8 +7,8 @@
     <meta name=viewport content="width=device-width, initial-scale=1">
     {{>site/templates/meta-data.html}}
     <title>{{title}}</title>
-    <link rel="stylesheet" href="/blog/css/style.css">
-    <link rel="stylesheet" href="/blog/css/syntax.css">
+    <link rel="stylesheet" href="{{basePath}}/css/style.css">
+    <link rel="stylesheet" href="{{basePath}}/css/syntax.css">
 </head>
 <body>
     {{>site/templates/header.html}}
@@ -21,7 +21,7 @@
             </span>
 
             {{#image}}
-            <img class="post-image" src="/blog/images/{{image}}">
+            <img class="post-image" src="{{basePath}}/images/{{image}}">
             {{/image}}
 
             {{#author}}
