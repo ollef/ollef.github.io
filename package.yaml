@@ -6,10 +6,6 @@ author:              "Me"
 maintainer:          "example@example.com"
 copyright:           "20XX Me"
 
-extra-source-files:
-- README.md
-- ChangeLog.md
-
 synopsis:            My site built with slick!
 category:            Slick-Site
 
