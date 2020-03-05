@@ -74,6 +74,7 @@ data Post =
          , url     :: String
          , date    :: String
          , image   :: Maybe String
+         , draft   :: Bool
          }
     deriving (Generic, Eq, Ord, Show, FromJSON, ToJSON, Binary)
 
@@ -143,8 +144,11 @@ data AtomData = AtomData
 buildRules :: Action ()
 buildRules = do
   allPosts <- buildPosts
-  buildIndex allPosts
-  buildFeed allPosts
+  let
+    publishedPosts =
+      filter (not . draft) allPosts
+  buildIndex publishedPosts
+  buildFeed publishedPosts
   copyStaticFiles
 
 main :: IO ()

@@ -4,6 +4,7 @@ author: Olle Fredriksson
 date: 2020-03-04
 description: My first blog post using slick
 image: code.jpg
+draft: false
 ---
 
 Welcome to your first blog post!
