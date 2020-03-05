@@ -105,7 +105,7 @@ buildPost srcPath = cacheAction ("build" :: T.Text, srcPath) $ do
   let postUrl = T.pack . dropDirectory1 $ srcPath -<.> "html"
       withPostUrl = _Object . at "url" ?~ String postUrl
   -- Add additional metadata we've been able to compute
-  let fullPostData = withSiteMeta . withPostUrl $ postData
+  let fullPostData = withSiteMeta $ withPostUrl postData
   template <- compileTemplate' "site/templates/post.html"
   writeFile' (outputFolder </> T.unpack postUrl) . T.unpack $ substitute template fullPostData
   convert fullPostData
