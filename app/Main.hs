@@ -42,7 +42,13 @@ outputFolder = "blog/"
 withSiteMeta :: Value -> Value
 withSiteMeta (Object obj) = Object $ HML.union obj siteMetaObj
   where
-    Object siteMetaObj = toJSON siteMeta
+    siteMetaObj =
+      case toJSON siteMeta of
+        Object obj' ->
+          obj'
+
+        _ ->
+          error "withSiteMeta non-object"
 withSiteMeta _ = error "only add site meta to objects"
 
 data SiteMeta =
