@@ -3,3 +3,6 @@ watch:
 
 serve:
 	yarn run serve
+
+clean:
+	rm -r .shake
