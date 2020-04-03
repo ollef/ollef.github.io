@@ -168,6 +168,9 @@ header {
     height: 3em;
     background: #2d2d2d;
     color: #fff;
+    -webkit-box-shadow: 0px 0px 15px 0px rgba(0,0,0,0.4);
+    -moz-box-shadow: 0px 0px 15px 0px rgba(0,0,0,0.4);
+    box-shadow: 0px 0px 15px 0px rgba(0,0,0,0.4);
   }
 }
 
