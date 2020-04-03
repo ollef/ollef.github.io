@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en"> 
+<head profile="http://www.w3.org/2005/10/profile">
+    <meta charset="UTF-8">
+    <meta name="description" content="Olle Fredriksson">
+    <meta name="author" content="Olle Fredriksson">
+    <meta name=viewport content="width=device-width, initial-scale=1">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:site" content="@ollfredo">
+<meta name="twitter:creator" content="@ollfredo">
+<meta name="twitter:title" content="Optimising the Sixty compiler">
+    <meta name="twitter:description" content="Optimising Sixty, the new Sixten compiler">
+    <meta name="twitter:image" content="https://ollef.github.io/blog/images/code.jpg">
+    <title>Optimising the Sixty compiler</title>
+    <link rel="stylesheet" href="/blog/css/style.css">
+    <link rel="stylesheet" href="/blog/css/syntax.css">
+</head>
+<body>
+    <header>
+        <nav>
+            <a id="beacon" href="/blog/">
+                <div>Back</div>
+            </a>
+        </nav>
+    </header>
+
+<div id="page">
+    <div class="wrapper">
+        <div class="masthead">
+            <span class="title">
+                Optimising the Sixty compiler
+            </span>
+
+            <img class="post-image" src="/blog/images/code.jpg">
+
+            <span class="byline">by Olle Fredriksson</span>
+
+            <span class="date">2020-03-06</span>
+
+            <div class="metadata">
+            </div>
+        </div>
+    </div>
+    <article class="post">
+        <h2 id="background">Background</h2>
+<p>I'm working on a reimplementation of <a href="https://github.com/ollef/sixten">Sixten</a>, a dependently typed programming language that supports unboxed data. The reimplementation currently lives in a separate repository, and is called <a href="https://github.com/ollef/sixty">Sixty</a>, though the intention is that it should replace Sixten eventually. The main reason for reimplementing it was to try out some implementation techniques to make it faster, inspired by András Kovács' <a href="https://github.com/AndrasKovacs/smalltt">smalltt</a>.</p>
+<p>In this post I'd like to show some optimisations that I did to Sixty, though I'm going to focus on the parts of the compiler that are <em>not</em> the type checker, as it's already quite fast.</p>
+<p>The goal of the post is both to show what I'm working on and also to show some of my workflow when profiling and optimising Haskell code.</p>
+<h2 id="a-benchmark">A benchmark</h2>
+<p>I was curious to see how Sixty, the new Sixten compiler, would handle large programs. The problem is that no one has ever written a large program in Sixten so far.</p>
+<p>As a substitute, I added a command to Sixty to generate nonsense programs of a given size. The programs that we'll be using in this post consist of 100 modules, with just over 10 000 lines of code in total, that all look like this:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb1-1"><a href="#cb1-1"></a><span class="kw">module</span> <span class="dt">Module60</span> exposing (<span class="op">..</span>)</span>
+<span id="cb1-2"><a href="#cb1-2"></a></span>
+<span id="cb1-3"><a href="#cb1-3"></a><span class="kw">import</span> <span class="dt">Module9</span></span>
+<span id="cb1-4"><a href="#cb1-4"></a><span class="kw">import</span> <span class="dt">Module24</span></span>
+<span id="cb1-5"><a href="#cb1-5"></a><span class="kw">import</span> <span class="dt">Module35</span></span>
+<span id="cb1-6"><a href="#cb1-6"></a><span class="kw">import</span> <span class="dt">Module16</span></span>
+<span id="cb1-7"><a href="#cb1-7"></a><span class="kw">import</span> <span class="dt">Module46</span></span>
+<span id="cb1-8"><a href="#cb1-8"></a><span class="kw">import</span> <span class="dt">Module37</span></span>
+<span id="cb1-9"><a href="#cb1-9"></a><span class="kw">import</span> <span class="dt">Module50</span></span>
+<span id="cb1-10"><a href="#cb1-10"></a><span class="kw">import</span> <span class="dt">Module47</span></span>
+<span id="cb1-11"><a href="#cb1-11"></a><span class="kw">import</span> <span class="dt">Module46</span></span>
+<span id="cb1-12"><a href="#cb1-12"></a><span class="kw">import</span> <span class="dt">Module3</span></span>
+<span id="cb1-13"><a href="#cb1-13"></a></span>
+<span id="cb1-14"><a href="#cb1-14"></a>f1 <span class="op">:</span> <span class="dt">Type</span></span>
+<span id="cb1-15"><a href="#cb1-15"></a>f1 <span class="ot">=</span> Module46.f10 <span class="ot">-&gt;</span> Module46.f20</span>
+<span id="cb1-16"><a href="#cb1-16"></a></span>
+<span id="cb1-17"><a href="#cb1-17"></a>f2 <span class="op">:</span> <span class="dt">Type</span></span>
+<span id="cb1-18"><a href="#cb1-18"></a>f2 <span class="ot">=</span> Module50.f24 <span class="ot">-&gt;</span> Module47.f13</span>
+<span id="cb1-19"><a href="#cb1-19"></a></span>
+<span id="cb1-20"><a href="#cb1-20"></a>[<span class="op">...</span>]</span>
+<span id="cb1-21"><a href="#cb1-21"></a></span>
+<span id="cb1-22"><a href="#cb1-22"></a>f30 <span class="op">:</span> <span class="dt">Type</span></span>
+<span id="cb1-23"><a href="#cb1-23"></a>f30 <span class="ot">=</span> Module37.f4 <span class="ot">-&gt;</span> Module24.f24</span></code></pre></div>
+<p>Each module is 100 lines of code, of which about a third are newlines, and has thirty definitions that refer to definitions from some of the other modules. The definitions are simple enough to be type checked very quickly, so the benchmark will make us focus our attention on parts of the compiler other than the type checker.</p>
+<h2 id="baseline">Baseline</h2>
+<p>This post starts on <a href="https://github.com/ollef/sixty/tree/29094e006d4c88f51d744b0fd26f3e2e18af3ce0">this commit</a>.</p>
+<p>At this point we get the following time to run <code>sixty check</code> in the 100 module project on my laptop:</p>
+<table>
+<thead>
+<tr class="header">
+<th></th>
+<th style="text-align: right;">Time</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Baseline</td>
+<td style="text-align: right;">1.265 s</td>
+</tr>
+</tbody>
+</table>
+<h2 id="initial-profiling">Initial profiling</h2>
+<p>I use three main tools to try to identify bottlenecks and other things to improve:</p>
+<ul>
+<li><p><a href="http://www.haskellforall.com/2016/05/a-command-line-benchmark-tool.html">bench</a> is a replacement for the Unix <code>time</code> command that I use to get more reliable timings, which is especially useful to compare the before and after time of some change.</p></li>
+<li><p>GHC's built-in profiling support, which gives us a detailed breakdown of where time is spent when running the program.</p>
+<p>When using Stack, we can build with profiling by issuing:</p>
+<pre><code>stack install --profile</code></pre>
+<p>Then we can run the program with profiling enabled:</p>
+<pre><code>sixty check +RTS -p</code></pre>
+<p>This produces a file <code>sixty.prof</code> that contains the profiling information.</p>
+<p>I also really like to use <a href="https://github.com/fpco/ghc-prof-flamegraph">ghc-prof-flamegraph</a> to turn the profiling output into a flamegraph:</p>
+<pre><code>ghc-prof-flamegraph sixty.prof</code></pre></li>
+</ul>
+<h2 id="identifying-parallelism-bottlenecks">Identifying parallelism bottlenecks</h2>
+<h2 id="finding-sequential-bottlenecks">Finding sequential bottlenecks</h2>
+<p>GHC has very good support for profiling. To get started we need to build the project with profiling enabled. With Stack, this is done by issuing:</p>
+<pre><code>stack install --profile</code></pre>
+<p>Then we can run the program with profiling enabled:</p>
+<pre><code>sixty check +RTS -p</code></pre>
+    </article>
+
+</div>
+
+<footer>
+    <div class="social-links">
+        <div class="social-link-wrapper">
+            <a class="social-link" href="https://github.com/ollef">
+                <img src="/blog/images/github-logo.svg" alt="Github profile"/>
+            </a>
+        </div>
+        <div class="social-link-wrapper">
+            <a class="social-link" href="https://twitter.com/ollfredo">
+                <img src="/blog/images/twitter-logo.svg" alt="Twitter profile"/>
+            </a>
+        </div>
+    </div>
+    <div id="copyright">&copy; 2020 <a href="mailto:fredriksson.olle@gmail.com">Olle Fredriksson</a> — <a href="/blog/atom.xml">Feed</a></div>
+
+    Built using <a href="https://github.com/ChrisPenner/slick">slick</a> ❤️
+</footer>
+
+<script src="/blog/js/main.js"></script>
+</body>
+</html>
