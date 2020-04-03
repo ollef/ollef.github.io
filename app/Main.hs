@@ -30,7 +30,7 @@ siteMeta =
     SiteMeta { siteAuthor = "Olle Fredriksson"
              , baseUrl = "https://ollef.github.io/blog"
              , basePath = "/blog"
-             , siteTitle = "Olle Fredriksson"
+             , siteTitle = "Olle Fredriksson's blog"
              , twitterHandle = Just "ollfredo"
              , githubUser = Just "ollef"
              }
