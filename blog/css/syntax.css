@@ -1,36 +1,4 @@
-/* pre { */
-/*     background-color: #F3FAFD; */
-/* } */
-
-/* code { */
-/*     background-color: #F3FAFD; */
-/*     color: #268BD2; */
-/* } */
-
-/* /1* KeyWordTok *1/ */
-/* .sourceCode .kw { color: #600095; } */
-/* /1* DataTypeTok *1/ */
-/* .sourceCode .dt { color: #268BD2; } */
-
-/* /1* DecValTok (decimal value), BaseNTok, FloatTok *1/ */
-/* .sourceCode .dv, .sourceCode .bn, .sourceCode .fl { color: #AE81FF; } */
-/* /1* CharTok *1/ */
-/* .sourceCode .ch { color: #37ad2d; } */
-/* /1* StringTok *1/ */
-/* .sourceCode .st { color: #37ad2d; } */
-/* /1* CommentTok *1/ */
-/* .sourceCode .co { color: #7E8E91; } */
-/* /1* OtherTok *1/ */
-/* .sourceCode .ot { color: #EB005B; } */
-/* /1* AlertTok *1/ */
-/* .sourceCode .al { color: #A6E22E; font-weight: bold; } */
-/* /1* FunctionTok *1/ */
-/* .sourceCode .fu { color: #333; } */
-/* /1* RegionMarkerTok *1/ */
-/* .sourceCode .re { } */
-/* /1* ErrorTok *1/ */
-/* .sourceCode .er { color: #E6DB74; font-weight: bold; } */
-
+code { color: #515151; background-color: #f2f0ec; }
 
 code.sourceCode { color: #fff }
 

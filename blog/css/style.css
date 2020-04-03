@@ -43,20 +43,20 @@ html {
 html {
   font-family: georgia, serif;
   color: #222;
-  background: #fffffc;
+  background: #fff;
   background: -webkit-linear-gradient(
     top,
-    #eee 0%,
+    #f9f9f7 0%,
     #fff 10%,
     #fff 90%,
-    #eee 100%
+    #f9f9f7 100%
   );
   background: linear-gradient(
     to bottom,
-    #eee 0%,
+    #f9f9f7 0%,
     #fff 10%,
     #fff 90%,
-    #eee 100%
+    #f9f9f7 100%
   );
   background-attachment: fixed;
   height: 100%;
@@ -147,10 +147,7 @@ a:hover {
   color: inherit;
 }
 
-a:hover,
-a:visited:hover,
-a:hover:hover {
-  text-decoration: underline;
+a:hover {
   opacity: 0.6;
 }
 
@@ -273,8 +270,6 @@ footer {
   /*min-height: 100%;*/
   padding: 0px 20px;
   margin: 3em auto;
-  -webkit-transition: color 2s;
-  transition: color 2s;
   font-size: 1.1em;
 }
 
@@ -328,7 +323,7 @@ footer {
 }
 
 .post table tr.odd {
-  background: #eee;
+  background: #f2f0ec;
 }
 
 .post table tr.even {
@@ -365,8 +360,7 @@ footer {
 }
 
 .table-of-contents li a {
-  color: #222;
-  background: #f8f8f6;
+  background: #f9f9f7;
   font-weight: normal;
   box-sizing: border-box;
   display: block;
@@ -381,12 +375,12 @@ footer {
 }
 
 .table-of-contents li:nth-child(odd) a {
-  background: #eeeeec;
+  background: #f2f0ec;
 }
 
 .table-of-contents li a:hover {
-  background: #222;
-  color: #fffffc;
+  background: #2d2d2d;
+  color: #fff;
   opacity: inherit;
   text-decoration: none;
 }
@@ -436,7 +430,6 @@ footer {
 .social-link img {
   width: 40px;
   height: 40px;
-  display: block;
 }
 
 #copyright {
