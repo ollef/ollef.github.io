@@ -166,8 +166,8 @@ header {
 @media only screen and (max-width: 750px) {
   header {
     height: 3em;
-    background: #222;
-    color: #fffffc;
+    background: #2d2d2d;
+    color: #fff;
   }
 }
 
@@ -319,17 +319,17 @@ footer {
   border-collapse: collapse;
 }
 
+.post table tr.header {
+  background: #2d2d2d;
+  color: #fff;
+}
+
 .post table tr.odd {
   background: #eee;
 }
 
 .post table tr.even {
   background: #fff;
-}
-
-.post table tr.header {
-  background: #222;
-  color: #fffffc;
 }
 
 .post table th {
