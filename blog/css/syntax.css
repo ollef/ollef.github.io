@@ -1,32 +1,56 @@
-pre {
-    background-color: #F3FAFD;
-}
+/* pre { */
+/*     background-color: #F3FAFD; */
+/* } */
 
-code {
-    background-color: #F3FAFD;
-    color: #268BD2;
-}
+/* code { */
+/*     background-color: #F3FAFD; */
+/*     color: #268BD2; */
+/* } */
 
-/* KeyWordTok */
-.sourceCode .kw { color: #600095; }
-/* DataTypeTok */
-.sourceCode .dt { color: #268BD2; }
+/* /1* KeyWordTok *1/ */
+/* .sourceCode .kw { color: #600095; } */
+/* /1* DataTypeTok *1/ */
+/* .sourceCode .dt { color: #268BD2; } */
 
-/* DecValTok (decimal value), BaseNTok, FloatTok */
-.sourceCode .dv, .sourceCode .bn, .sourceCode .fl { color: #AE81FF; }
-/* CharTok */
-.sourceCode .ch { color: #37ad2d; }
-/* StringTok */
-.sourceCode .st { color: #37ad2d; }
-/* CommentTok */
-.sourceCode .co { color: #7E8E91; }
-/* OtherTok */
-.sourceCode .ot { color: #EB005B; }
-/* AlertTok */
-.sourceCode .al { color: #A6E22E; font-weight: bold; }
-/* FunctionTok */
-.sourceCode .fu { color: #333; }
-/* RegionMarkerTok */
-.sourceCode .re { }
-/* ErrorTok */
-.sourceCode .er { color: #E6DB74; font-weight: bold; }
+/* /1* DecValTok (decimal value), BaseNTok, FloatTok *1/ */
+/* .sourceCode .dv, .sourceCode .bn, .sourceCode .fl { color: #AE81FF; } */
+/* /1* CharTok *1/ */
+/* .sourceCode .ch { color: #37ad2d; } */
+/* /1* StringTok *1/ */
+/* .sourceCode .st { color: #37ad2d; } */
+/* /1* CommentTok *1/ */
+/* .sourceCode .co { color: #7E8E91; } */
+/* /1* OtherTok *1/ */
+/* .sourceCode .ot { color: #EB005B; } */
+/* /1* AlertTok *1/ */
+/* .sourceCode .al { color: #A6E22E; font-weight: bold; } */
+/* /1* FunctionTok *1/ */
+/* .sourceCode .fu { color: #333; } */
+/* /1* RegionMarkerTok *1/ */
+/* .sourceCode .re { } */
+/* /1* ErrorTok *1/ */
+/* .sourceCode .er { color: #E6DB74; font-weight: bold; } */
+
+
+code.sourceCode { color: #fff }
+
+table.sourceCode, tr.sourceCode, td.sourceCode, table.sourceCode pre
+{ margin: 0; padding: 0; border: 0; vertical-align: baseline; border: none; background-color: #2d2d2d; color: #d3d0c8 }
+td.nums { text-align: right; padding-right: 5px; padding-left: 5px; background-color: #393939; }
+td.sourceCode { padding-left: 5px; }
+code.sourceCode { background-color: #2d2d2d; }
+pre.sourceCode { background-color: #2d2d2d; line-height: 125%; padding: 0.5em; }
+td.nums pre { background-color: #393939; line-height: 125% }
+code.sourceCode span.kw { color: #6699cc; font-weight: bold } /* Keyword */
+code.sourceCode span.dt { color: #cc99cc} /* Keyword.Type */
+code.sourceCode span.dv { color: #f99157 } /* Literal.Number.Integer */
+code.sourceCode span.bn { color: #f99157 } /* Literal.Number.Hex */
+code.sourceCode span.fl { color: #f99157 } /* Literal.Number.Float */
+code.sourceCode span.ch { color: #99cc99} /* Literal.String.Char */
+code.sourceCode span.st { color: #99cc99 } /* Literal.String */
+code.sourceCode span.co { color: #747369 } /* Comment */
+code.sourceCode span.ot { color: #d27b53 } /* Comment.Preproc */
+code.sourceCode span.al { color: #cc99cc } /* Generic.Error */
+code.sourceCode span.fu { color: #ffcc66 } /* Name.Function */
+code.sourceCode span.re { color: #66cccc}
+code.sourceCode span.er { color: #f2777a; border: 1px solid #cc99cc } /* Error */
