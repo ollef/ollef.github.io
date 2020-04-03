@@ -4,6 +4,7 @@ watch:
 
 .PHONY: serve
 serve:
+	yarn
 	yarn run serve
 
 .PHONY: clean
