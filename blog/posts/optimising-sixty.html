@@ -10,7 +10,7 @@
 <meta name="twitter:creator" content="@ollfredo">
 <meta name="twitter:title" content="Optimising the Sixty compiler">
     <meta name="twitter:description" content="Optimising Sixty, the new Sixten compiler">
-    <meta name="twitter:image" content="https://ollef.github.io/blog/images/code.jpg">
+    <meta name="twitter:image" content="https://ollef.github.io/blog/images/optimising-sixty/9-d5bad6f606450d0a2c8926072e7b4845d982b81f-threadscope.png">
     <title>Optimising the Sixty compiler | Olle Fredriksson&#39;s blog</title>
     <link rel="icon" type="image/png" href="/blog/images/favicon.png">
     <link rel="stylesheet" href="/blog/css/style.css">
@@ -20,7 +20,7 @@
     <header>
         <nav>
             <a href="/blog/">
-                Back
+                Home
             </a>
         </nav>
     </header>
@@ -32,7 +32,7 @@
                 Optimising the Sixty compiler
             </span>
 
-            <img class="post-image" src="/blog/images/code.jpg">
+            <img class="post-image" src="/blog/images/optimising-sixty/9-d5bad6f606450d0a2c8926072e7b4845d982b81f-threadscope.png">
 
             <span class="byline">by Olle Fredriksson</span>
 
@@ -44,7 +44,7 @@
     </div>
     <article class="post">
         <h2 id="background">Background</h2>
-<p>I'm working on a reimplementation of <a href="https://github.com/ollef/sixten">Sixten</a>, a dependently typed programming language that supports unboxed data. The reimplementation currently lives in a separate repository, and is called <a href="https://github.com/ollef/sixty">Sixty</a>, though the intention is that it should replace Sixten eventually. The main reason for reimplementing it was to try out some implementation techniques to make it faster, inspired by András Kovács' <a href="https://github.com/AndrasKovacs/smalltt">smalltt</a>.</p>
+<p>I'm working on a reimplementation of <a href="https://github.com/ollef/sixten">Sixten</a>, a dependently typed programming language that supports unboxed data. The reimplementation currently lives in a separate repository, and is called <a href="https://github.com/ollef/sixty">Sixty</a>, though the intention is that it should replace Sixten eventually. The main reason for reimplementing it was to try out some implementation techniques to make the type checker faster, inspired by András Kovács' <a href="https://github.com/AndrasKovacs/smalltt">smalltt</a>.</p>
 <p>In this post I'd like to show some optimisations that I did to Sixty, though I'm going to focus on the parts of the compiler that are <em>not</em> the type checker, as it's already quite fast.</p>
 <p>The goal of the post is both to show what I'm working on and also to show some of my workflow when profiling and optimising Haskell code.</p>
 <h2 id="a-benchmark">A benchmark</h2>
@@ -73,10 +73,24 @@
 <span id="cb1-21"><a href="#cb1-21"></a></span>
 <span id="cb1-22"><a href="#cb1-22"></a>f30 <span class="op">:</span> <span class="dt">Type</span></span>
 <span id="cb1-23"><a href="#cb1-23"></a>f30 <span class="ot">=</span> Module37.f4 <span class="ot">-&gt;</span> Module24.f24</span></code></pre></div>
-<p>Each module is 100 lines of code, of which about a third are newlines, and has thirty definitions that refer to definitions from some of the other modules. The definitions are simple enough to be type checked very quickly, so the benchmark will make us focus our attention on parts of the compiler other than the type checker.</p>
-<h2 id="baseline">Baseline</h2>
-<p>This post starts on <a href="https://github.com/ollef/sixty/tree/29094e006d4c88f51d744b0fd26f3e2e18af3ce0">this commit</a>.</p>
-<p>At this point we get the following time to run <code>sixty check</code> in the 100 module project on my laptop:</p>
+<p>Each module is about 100 lines of code, of which a third or so are newlines, and has thirty definitions that refer to definitions from some of the other modules. The definitions are simple enough to be type checked very quickly, so the benchmark will make us focus our attention on parts of the compiler other than the type checker.</p>
+<h2 id="profiling">Profiling</h2>
+<p>I use three main tools to try to identify bottlenecks and other things to improve:</p>
+<ul>
+<li><p><a href="http://www.haskellforall.com/2016/05/a-command-line-benchmark-tool.html">bench</a> is a replacement for the Unix <code>time</code> command that I use to get more reliable timings, which is especially useful for comparing the before and after time of some change.</p></li>
+<li><p>GHC's built-in profiling support, which gives us a detailed breakdown of where time is spent when running the program.</p>
+<p>When using Stack, we can build with profiling by issuing:</p>
+<pre><code>stack install --profile</code></pre>
+<p>Then we can run the program with profiling enabled:</p>
+<pre><code>sixty check +RTS -p</code></pre>
+<p>This produces a file <code>sixty.prof</code> that contains the profiling information.</p>
+<p>I also really like to use <a href="https://github.com/fpco/ghc-prof-flamegraph">ghc-prof-flamegraph</a> to turn the profiling output into a flamegraph:</p>
+<pre><code>ghc-prof-flamegraph sixty.prof</code></pre></li>
+<li><p><a href="https://wiki.haskell.org/ThreadScope">Threadscope</a> is a visual tool for debugging the parallelism in a Haskell program. It also shows when the garbage collector runs, so can be used when tuning garbage collector parameters.</p></li>
+</ul>
+<h2 id="baseline-and-initial-profiling">Baseline and initial profiling</h2>
+<p>This baseline used in this post starts on <a href="https://github.com/ollef/sixty/tree/29094e006d4c88f51d744b0fd26f3e2e18af3ce0">this commit</a>.</p>
+<p>At this point we get the following time to run <code>sixty check</code> in the 100 module project on my machine:</p>
 <table>
 <thead>
 <tr class="header">
@@ -87,29 +101,351 @@
 <tbody>
 <tr class="odd">
 <td>Baseline</td>
-<td style="text-align: right;">1.265 s</td>
+<td style="text-align: right;">1.30 s</td>
 </tr>
 </tbody>
 </table>
-<h2 id="initial-profiling">Initial profiling</h2>
-<p>I use three main tools to try to identify bottlenecks and other things to improve:</p>
+<p>Here's a flamegraph of the profiling output at this point:</p>
+<p><a href="../images/optimising-sixty/0-29094e006d4c88f51d744b0fd26f3e2e18af3ce0.svg"><img src="../images/optimising-sixty/0-29094e006d4c88f51d744b0fd26f3e2e18af3ce0.svg" /></a></p>
+<p>Two things stick out to me in the flamegraph:</p>
 <ul>
-<li><p><a href="http://www.haskellforall.com/2016/05/a-command-line-benchmark-tool.html">bench</a> is a replacement for the Unix <code>time</code> command that I use to get more reliable timings, which is especially useful to compare the before and after time of some change.</p></li>
-<li><p>GHC's built-in profiling support, which gives us a detailed breakdown of where time is spent when running the program.</p>
-<p>When using Stack, we can build with profiling by issuing:</p>
-<pre><code>stack install --profile</code></pre>
-<p>Then we can run the program with profiling enabled:</p>
-<pre><code>sixty check +RTS -p</code></pre>
-<p>This produces a file <code>sixty.prof</code> that contains the profiling information.</p>
-<p>I also really like to use <a href="https://github.com/fpco/ghc-prof-flamegraph">ghc-prof-flamegraph</a> to turn the profiling output into a flamegraph:</p>
-<pre><code>ghc-prof-flamegraph sixty.prof</code></pre></li>
+<li>Parsing takes about 45 % of the time.</li>
+<li>Operations on <a href="https://hackage.haskell.org/package/dependent-map"><code>Data.Dependent.Map</code></a> take about 15 % of the time, and a large part of that is calls to <code>Query.gcompare</code>.</li>
 </ul>
-<h2 id="identifying-parallelism-bottlenecks">Identifying parallelism bottlenecks</h2>
-<h2 id="finding-sequential-bottlenecks">Finding sequential bottlenecks</h2>
-<p>GHC has very good support for profiling. To get started we need to build the project with profiling enabled. With Stack, this is done by issuing:</p>
-<pre><code>stack install --profile</code></pre>
-<p>Then we can run the program with profiling enabled:</p>
-<pre><code>sixty check +RTS -p</code></pre>
+<p>Here's what it looks like in ThreadScope:</p>
+<p><a href="../images/optimising-sixty/0-29094e006d4c88f51d744b0fd26f3e2e18af3ce0-threadscope.png"><img src="../images/optimising-sixty/0-29094e006d4c88f51d744b0fd26f3e2e18af3ce0-threadscope.png" /></a></p>
+<p>Here's a more zoomed in ThreadScope picture:</p>
+<p><a href="../images/optimising-sixty/0-29094e006d4c88f51d744b0fd26f3e2e18af3ce0-threadscope-detail.png"><img src="../images/optimising-sixty/0-29094e006d4c88f51d744b0fd26f3e2e18af3ce0-threadscope-detail.png" /></a></p>
+<p>I note the following in the ThreadScope output:</p>
+<ul>
+<li>One core is doing almost all the work, with other cores occasionally performing very short tasks.</li>
+<li>Garbage collection runs extremely often and takes just over 20 % of the time.</li>
+</ul>
+<h2 id="optimisation-1-better-rts-flags">Optimisation 1: Better RTS flags</h2>
+<p>The result of this change is this:</p>
+<table>
+<thead>
+<tr class="header">
+<th></th>
+<th style="text-align: right;">Time</th>
+<th style="text-align: right;">Delta</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Baseline</td>
+<td style="text-align: right;">1.30 s</td>
+<td style="text-align: right;"></td>
+</tr>
+<tr class="even">
+<td>RTS flags</td>
+<td style="text-align: right;">1.08 s</td>
+<td style="text-align: right;">-17 %</td>
+</tr>
+</tbody>
+</table>
+<p><a href="../images/optimising-sixty/1-f8d4ee7ee0d3d617c6d30401592f5639be60b14a-threadscope.png"><img src="../images/optimising-sixty/1-f8d4ee7ee0d3d617c6d30401592f5639be60b14a-threadscope.png" /></a></p>
+<h2 id="optimisation-2-using-iorefs-instead-of-mvars">Optimisation 2: Using <code>IORef</code>s instead of <code>MVar</code>s</h2>
+<table>
+<thead>
+<tr class="header">
+<th></th>
+<th style="text-align: right;">Time</th>
+<th style="text-align: right;">Delta</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Baseline</td>
+<td style="text-align: right;">1.30 s</td>
+<td style="text-align: right;"></td>
+</tr>
+<tr class="even">
+<td>RTS flags</td>
+<td style="text-align: right;">1.08 s</td>
+<td style="text-align: right;">-17 %</td>
+</tr>
+<tr class="odd">
+<td><code>IORef</code></td>
+<td style="text-align: right;">0.613 s</td>
+<td style="text-align: right;">-43 %</td>
+</tr>
+</tbody>
+</table>
+<p><a href="../images/optimising-sixty/2-54b87689f345173dbed3510a396641cd8c5e43f2-threadscope.png"><img src="../images/optimising-sixty/2-54b87689f345173dbed3510a396641cd8c5e43f2-threadscope.png" /></a></p>
+<h2 id="optimisation-3-manual-query-parallelisation">Optimisation 3: Manual query parallelisation</h2>
+<table>
+<thead>
+<tr class="header">
+<th></th>
+<th style="text-align: right;">Time</th>
+<th style="text-align: right;">Delta</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Baseline</td>
+<td style="text-align: right;">1.30 s</td>
+<td style="text-align: right;"></td>
+</tr>
+<tr class="even">
+<td>RTS flags</td>
+<td style="text-align: right;">1.08 s</td>
+<td style="text-align: right;">-17 %</td>
+</tr>
+<tr class="odd">
+<td><code>IORef</code></td>
+<td style="text-align: right;">0.613 s</td>
+<td style="text-align: right;">-43 %</td>
+</tr>
+<tr class="even">
+<td>Manual parallelisation</td>
+<td style="text-align: right;">0.451 s</td>
+<td style="text-align: right;">-26 %</td>
+</tr>
+</tbody>
+</table>
+<p><a href="../images/optimising-sixty/4-7ca773e347dae952d4c7249a0310f10077a2474b-threadscope.png"><img src="../images/optimising-sixty/4-7ca773e347dae952d4c7249a0310f10077a2474b-threadscope.png" /></a></p>
+<h2 id="optimisation-4-parser-lookahead">Optimisation 4: Parser lookahead</h2>
+<table>
+<thead>
+<tr class="header">
+<th></th>
+<th style="text-align: right;">Time</th>
+<th style="text-align: right;">Delta</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Baseline</td>
+<td style="text-align: right;">1.30 s</td>
+<td style="text-align: right;"></td>
+</tr>
+<tr class="even">
+<td>RTS flags</td>
+<td style="text-align: right;">1.08 s</td>
+<td style="text-align: right;">-17 %</td>
+</tr>
+<tr class="odd">
+<td><code>IORef</code></td>
+<td style="text-align: right;">0.613 s</td>
+<td style="text-align: right;">-43 %</td>
+</tr>
+<tr class="even">
+<td>Manual parallelisation</td>
+<td style="text-align: right;">0.451 s</td>
+<td style="text-align: right;">-26 %</td>
+</tr>
+<tr class="odd">
+<td>Parser lookahead</td>
+<td style="text-align: right;">0.442 s</td>
+<td style="text-align: right;">-2 %</td>
+</tr>
+</tbody>
+</table>
+<h2 id="optimisation-5-dependent-hashmap">Optimisation 5: Dependent hashmap</h2>
+<table>
+<thead>
+<tr class="header">
+<th></th>
+<th style="text-align: right;">Time</th>
+<th style="text-align: right;">Delta</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Baseline</td>
+<td style="text-align: right;">1.30 s</td>
+<td style="text-align: right;"></td>
+</tr>
+<tr class="even">
+<td>RTS flags</td>
+<td style="text-align: right;">1.08 s</td>
+<td style="text-align: right;">-17 %</td>
+</tr>
+<tr class="odd">
+<td><code>IORef</code></td>
+<td style="text-align: right;">0.613 s</td>
+<td style="text-align: right;">-43 %</td>
+</tr>
+<tr class="even">
+<td>Manual parallelisation</td>
+<td style="text-align: right;">0.451 s</td>
+<td style="text-align: right;">-26 %</td>
+</tr>
+<tr class="odd">
+<td>Parser lookahead</td>
+<td style="text-align: right;">0.442 s</td>
+<td style="text-align: right;">-2 %</td>
+</tr>
+<tr class="even">
+<td>Dependent hashmap</td>
+<td style="text-align: right;">0.257 s</td>
+<td style="text-align: right;">-42 %</td>
+</tr>
+</tbody>
+</table>
+<p><a href="../images/optimising-sixty/5-8ea6700415f1c46fb300571382ef438ae6082e8e.svg"><img src="../images/optimising-sixty/5-8ea6700415f1c46fb300571382ef438ae6082e8e.svg" /></a> <a href="../images/optimising-sixty/6-722533c5d71871ca1aa6235fe79a53f33da99c36.svg"><img src="../images/optimising-sixty/6-722533c5d71871ca1aa6235fe79a53f33da99c36.svg" /></a></p>
+<h2 id="optimisation-6-readert-based-rock-library">Optimisation 6: <code>ReaderT</code>-based Rock library</h2>
+<table>
+<thead>
+<tr class="header">
+<th></th>
+<th style="text-align: right;">Time</th>
+<th style="text-align: right;">Delta</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Baseline</td>
+<td style="text-align: right;">1.30 s</td>
+<td style="text-align: right;"></td>
+</tr>
+<tr class="even">
+<td>RTS flags</td>
+<td style="text-align: right;">1.08 s</td>
+<td style="text-align: right;">-17 %</td>
+</tr>
+<tr class="odd">
+<td><code>IORef</code></td>
+<td style="text-align: right;">0.613 s</td>
+<td style="text-align: right;">-43 %</td>
+</tr>
+<tr class="even">
+<td>Manual parallelisation</td>
+<td style="text-align: right;">0.451 s</td>
+<td style="text-align: right;">-26 %</td>
+</tr>
+<tr class="odd">
+<td>Parser lookahead</td>
+<td style="text-align: right;">0.442 s</td>
+<td style="text-align: right;">-2 %</td>
+</tr>
+<tr class="even">
+<td>Dependent hashmap</td>
+<td style="text-align: right;">0.257 s</td>
+<td style="text-align: right;">-42 %</td>
+</tr>
+<tr class="odd">
+<td><code>ReaderT</code> in Rock</td>
+<td style="text-align: right;">0.245 s</td>
+<td style="text-align: right;">-5 %</td>
+</tr>
+</tbody>
+</table>
+<p><a href="../images/optimising-sixty/7-048d2cec50e9994a0b159a2383580e3df5dd2a7e.svg"><img src="../images/optimising-sixty/7-048d2cec50e9994a0b159a2383580e3df5dd2a7e.svg" /></a></p>
+<h2 id="optimisation-7-separate-lexer">Optimisation 7: Separate lexer</h2>
+<table>
+<thead>
+<tr class="header">
+<th></th>
+<th style="text-align: right;">Time</th>
+<th style="text-align: right;">Delta</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Baseline</td>
+<td style="text-align: right;">1.30 s</td>
+<td style="text-align: right;"></td>
+</tr>
+<tr class="even">
+<td>RTS flags</td>
+<td style="text-align: right;">1.08 s</td>
+<td style="text-align: right;">-17 %</td>
+</tr>
+<tr class="odd">
+<td><code>IORef</code></td>
+<td style="text-align: right;">0.613 s</td>
+<td style="text-align: right;">-43 %</td>
+</tr>
+<tr class="even">
+<td>Manual parallelisation</td>
+<td style="text-align: right;">0.451 s</td>
+<td style="text-align: right;">-26 %</td>
+</tr>
+<tr class="odd">
+<td>Parser lookahead</td>
+<td style="text-align: right;">0.442 s</td>
+<td style="text-align: right;">-2 %</td>
+</tr>
+<tr class="even">
+<td>Dependent hashmap</td>
+<td style="text-align: right;">0.257 s</td>
+<td style="text-align: right;">-42 %</td>
+</tr>
+<tr class="odd">
+<td><code>ReaderT</code> in Rock</td>
+<td style="text-align: right;">0.245 s</td>
+<td style="text-align: right;">-5 %</td>
+</tr>
+<tr class="even">
+<td>Separate lexer</td>
+<td style="text-align: right;">0.154 s</td>
+<td style="text-align: right;">-37 %</td>
+</tr>
+</tbody>
+</table>
+<p><a href="../images/optimising-sixty/8-11c46c5b03f26a66347d5f387bd4cdfd5f6de4a2.svg"><img src="../images/optimising-sixty/8-11c46c5b03f26a66347d5f387bd4cdfd5f6de4a2.svg" /></a></p>
+<h2 id="optimisation-8-faster-hashing">Optimisation 8: Faster hashing</h2>
+<table>
+<thead>
+<tr class="header">
+<th></th>
+<th style="text-align: right;">Time</th>
+<th style="text-align: right;">Delta</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Baseline</td>
+<td style="text-align: right;">1.30 s</td>
+<td style="text-align: right;"></td>
+</tr>
+<tr class="even">
+<td>RTS flags</td>
+<td style="text-align: right;">1.08 s</td>
+<td style="text-align: right;">-17 %</td>
+</tr>
+<tr class="odd">
+<td><code>IORef</code></td>
+<td style="text-align: right;">0.613 s</td>
+<td style="text-align: right;">-43 %</td>
+</tr>
+<tr class="even">
+<td>Manual parallelisation</td>
+<td style="text-align: right;">0.451 s</td>
+<td style="text-align: right;">-26 %</td>
+</tr>
+<tr class="odd">
+<td>Parser lookahead</td>
+<td style="text-align: right;">0.442 s</td>
+<td style="text-align: right;">-2 %</td>
+</tr>
+<tr class="even">
+<td>Dependent hashmap</td>
+<td style="text-align: right;">0.257 s</td>
+<td style="text-align: right;">-42 %</td>
+</tr>
+<tr class="odd">
+<td><code>ReaderT</code> in Rock</td>
+<td style="text-align: right;">0.245 s</td>
+<td style="text-align: right;">-5 %</td>
+</tr>
+<tr class="even">
+<td>Separate lexer</td>
+<td style="text-align: right;">0.154 s</td>
+<td style="text-align: right;">-37 %</td>
+</tr>
+<tr class="odd">
+<td>Faster hashing</td>
+<td style="text-align: right;">0.146 s</td>
+<td style="text-align: right;">-5 %</td>
+</tr>
+</tbody>
+</table>
+<p><a href="../images/optimising-sixty/9-d5bad6f606450d0a2c8926072e7b4845d982b81f.svg"><img src="../images/optimising-sixty/9-d5bad6f606450d0a2c8926072e7b4845d982b81f.svg" /></a> <a href="../images/optimising-sixty/9-d5bad6f606450d0a2c8926072e7b4845d982b81f-threadscope.png"><img src="../images/optimising-sixty/9-d5bad6f606450d0a2c8926072e7b4845d982b81f-threadscope.png" /></a></p>
+<h2 id="conclusion">Conclusion</h2>
     </article>
 
 </div>
