@@ -1,6 +1,6 @@
 .PHONY: watch
 watch:
-	ghcid --run --reload=site
+	stack exec --package ghcid -- ghcid --run --reload=site
 
 .PHONY: serve
 serve:
