@@ -148,7 +148,8 @@
 <p>A look at the ThreadScope output shows that the change has a very noticeable effect of decreasing the number of garbage collections:</p>
 <p><a href="../images/speeding-up-sixty/1-f8d4ee7ee0d3d617c6d30401592f5639be60b14a-threadscope.png"><img src="../images/speeding-up-sixty/1-f8d4ee7ee0d3d617c6d30401592f5639be60b14a-threadscope.png" /></a></p>
 <p>Also note that the proportion of time used by the GC went from 20 % to 3 %.</p>
-<h2 id="optimisation-2-using-iorefs-instead-of-mvars">Optimisation 2: Using <code>IORef</code>s instead of <code>MVar</code>s</h2>
+<h2 id="optimisation-2-a-couple-of-rock-library-improvements">Optimisation 2: A couple of Rock library improvements</h2>
+<p><a href="https://github.com/ollef/rock">Rock</a> is a library that's used to implement query-based compilation in Sixty. I made two improvements to it to get these timings:</p>
 <table>
 <thead>
 <tr class="header">
@@ -169,14 +170,22 @@
 <td style="text-align: right;">-17 %</td>
 </tr>
 <tr class="odd">
-<td><code>IORef</code></td>
+<td>Rock</td>
 <td style="text-align: right;">0.613 s</td>
 <td style="text-align: right;">-43 %</td>
 </tr>
 </tbody>
 </table>
+<p>The changes made were:</p>
+<ul>
+<li>Using <code>IORef</code>s and atomic operations instead of <code>MVar</code>s: Rock uses a cache, which is potentially accessed and updated from different threads, to e.g. keep track of what queries have already been executed. Before this change this state was stored in an <code>MVar</code>, but since it's only doing fairly simple updates, the atomic operations of <code>IORef</code> are sufficient.</li>
+<li>Being a bit more clever about the automatic parallelisation: At this point in time Rock used a <a href="https://github.com/facebook/Haxl">Haxl</a>-like automatic parallelisation scheme, running queries done in an <code>Applicative</code> context in parallel. The change here is to only trigger parallel query execution if both queries are not already cached. Before this change even the cache lookup part of the queries was done in parallel, which is likely far too fine-grained to pay off.</li>
+</ul>
+<p>We can see quite clearly in ThreadScope that the parallelisation has a seemingly good effect for part of the runtime, but not all of it:</p>
 <p><a href="../images/speeding-up-sixty/2-54b87689f345173dbed3510a396641cd8c5e43f2-threadscope.png"><img src="../images/speeding-up-sixty/2-54b87689f345173dbed3510a396641cd8c5e43f2-threadscope.png" /></a></p>
 <h2 id="optimisation-3-manual-query-parallelisation">Optimisation 3: Manual query parallelisation</h2>
+<p>To improve the parallelism, I removed the automatic parallelism support from the Rock library, and started doing it manually instead.</p>
+<p>The following results are from simply processing all input modules in parallel, using a pooling to keep the number of threads the same as the number of threads on the machine it's run on:</p>
 <table>
 <thead>
 <tr class="header">
@@ -197,7 +206,7 @@
 <td style="text-align: right;">-17 %</td>
 </tr>
 <tr class="odd">
-<td><code>IORef</code></td>
+<td>Rock</td>
 <td style="text-align: right;">0.613 s</td>
 <td style="text-align: right;">-43 %</td>
 </tr>
@@ -208,8 +217,49 @@
 </tr>
 </tbody>
 </table>
+<p>Being able to do this is an advantage of using a query-based architecture. The modules can be processed in any order, and any non-processed dependencies that are missing are processed and cached on a need basis.</p>
+<p>ThreadScope shows that the CPU core utilisation is improved, even though the timings aren't as much better as one might expect from seeing the change:</p>
 <p><a href="../images/speeding-up-sixty/4-7ca773e347dae952d4c7249a0310f10077a2474b-threadscope.png"><img src="../images/speeding-up-sixty/4-7ca773e347dae952d4c7249a0310f10077a2474b-threadscope.png" /></a></p>
 <h2 id="optimisation-4-parser-lookahead">Optimisation 4: Parser lookahead</h2>
+<p>Here's an experiment that only helped a little. I noticed that parsing took quite a large proportion of the total time spent, about 15 %, which can be seen in the top-right part of the flamegraph:</p>
+<p><a href="../images/speeding-up-sixty/4-7ca773e347dae952d4c7249a0310f10077a2474b.svg"><img src="../images/speeding-up-sixty/4-7ca773e347dae952d4c7249a0310f10077a2474b.svg" /></a></p>
+<p>The parser is written using parsing combinators, and the "inner loop" of e.g. the term parser is a choice between a bunch of different alternatives. Something like this:</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb5-1"><a href="#cb5-1"></a><span class="ot">term ::</span> <span class="dt">Parser</span> <span class="dt">Term</span></span>
+<span id="cb5-2"><a href="#cb5-2"></a>term <span class="ot">=</span></span>
+<span id="cb5-3"><a href="#cb5-3"></a>  parenthesizedTerm    <span class="co">-- (t)</span></span>
+<span id="cb5-4"><a href="#cb5-4"></a>  <span class="op">&lt;|&gt;</span> letExpression    <span class="co">-- let x = t in t</span></span>
+<span id="cb5-5"><a href="#cb5-5"></a>  <span class="op">&lt;|&gt;</span> caseExpression   <span class="co">-- case t of branches</span></span>
+<span id="cb5-6"><a href="#cb5-6"></a>  <span class="op">&lt;|&gt;</span> lambdaExpression <span class="co">-- \x. t</span></span>
+<span id="cb5-7"><a href="#cb5-7"></a>  <span class="op">&lt;|&gt;</span> forallExpression <span class="co">-- forall x. t</span></span>
+<span id="cb5-8"><a href="#cb5-8"></a>  <span class="op">&lt;|&gt;</span> var              <span class="co">-- x</span></span></code></pre></div>
+<p>These alternatives are tried in order in the parser, which means that to reach e.g. the <code>forall</code> case, the parser will have tried to parse the first token of each of the four preceding alternatives. But note that the first character of each alternative rules out all other cases, save for (sometimes) the <code>var</code> case.</p>
+<p>So the idea was to rewrite the parser like this:</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb6-1"><a href="#cb6-1"></a><span class="ot">term ::</span> <span class="dt">Parser</span> <span class="dt">Term</span></span>
+<span id="cb6-2"><a href="#cb6-2"></a>term <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb6-3"><a href="#cb6-3"></a>  firstChar <span class="ot">&lt;-</span> lookAhead anyChar</span>
+<span id="cb6-4"><a href="#cb6-4"></a>  <span class="kw">case</span> firstChar <span class="kw">of</span></span>
+<span id="cb6-5"><a href="#cb6-5"></a>    <span class="ch">&#39;(&#39;</span> <span class="ot">-&gt;</span></span>
+<span id="cb6-6"><a href="#cb6-6"></a>      parenthesizedTerm</span>
+<span id="cb6-7"><a href="#cb6-7"></a></span>
+<span id="cb6-8"><a href="#cb6-8"></a>    <span class="ch">&#39;l&#39;</span> <span class="ot">-&gt;</span></span>
+<span id="cb6-9"><a href="#cb6-9"></a>      letExpression</span>
+<span id="cb6-10"><a href="#cb6-10"></a>      <span class="op">&lt;|&gt;</span> var</span>
+<span id="cb6-11"><a href="#cb6-11"></a></span>
+<span id="cb6-12"><a href="#cb6-12"></a>    <span class="ch">&#39;c&#39;</span> <span class="ot">-&gt;</span></span>
+<span id="cb6-13"><a href="#cb6-13"></a>      caseExpression</span>
+<span id="cb6-14"><a href="#cb6-14"></a>      <span class="op">&lt;|&gt;</span> var</span>
+<span id="cb6-15"><a href="#cb6-15"></a></span>
+<span id="cb6-16"><a href="#cb6-16"></a>    <span class="ch">&#39;\\&#39;</span> <span class="ot">-&gt;</span></span>
+<span id="cb6-17"><a href="#cb6-17"></a>      lambdaExpression</span>
+<span id="cb6-18"><a href="#cb6-18"></a></span>
+<span id="cb6-19"><a href="#cb6-19"></a>    <span class="ch">&#39;f&#39;</span> <span class="ot">-&gt;</span></span>
+<span id="cb6-20"><a href="#cb6-20"></a>      forallExpression</span>
+<span id="cb6-21"><a href="#cb6-21"></a>      <span class="op">&lt;|&gt;</span> var</span>
+<span id="cb6-22"><a href="#cb6-22"></a></span>
+<span id="cb6-23"><a href="#cb6-23"></a>    _ <span class="ot">-&gt;</span></span>
+<span id="cb6-24"><a href="#cb6-24"></a>      var</span></code></pre></div>
+<p>Now we just have to look at the first character to rule out the first four alternatives when parsing a <code>forall</code>.</p>
+<p>Here are the results:</p>
 <table>
 <thead>
 <tr class="header">
@@ -230,7 +280,7 @@
 <td style="text-align: right;">-17 %</td>
 </tr>
 <tr class="odd">
-<td><code>IORef</code></td>
+<td>Rock</td>
 <td style="text-align: right;">0.613 s</td>
 <td style="text-align: right;">-43 %</td>
 </tr>
@@ -246,6 +296,7 @@
 </tr>
 </tbody>
 </table>
+<p>Not great, but it's something.</p>
 <h2 id="optimisation-5-dependent-hashmap">Optimisation 5: Dependent hashmap</h2>
 <table>
 <thead>
@@ -267,7 +318,7 @@
 <td style="text-align: right;">-17 %</td>
 </tr>
 <tr class="odd">
-<td><code>IORef</code></td>
+<td>Rock</td>
 <td style="text-align: right;">0.613 s</td>
 <td style="text-align: right;">-43 %</td>
 </tr>
@@ -310,7 +361,7 @@
 <td style="text-align: right;">-17 %</td>
 </tr>
 <tr class="odd">
-<td><code>IORef</code></td>
+<td>Rock</td>
 <td style="text-align: right;">0.613 s</td>
 <td style="text-align: right;">-43 %</td>
 </tr>
@@ -358,7 +409,7 @@
 <td style="text-align: right;">-17 %</td>
 </tr>
 <tr class="odd">
-<td><code>IORef</code></td>
+<td>Rock</td>
 <td style="text-align: right;">0.613 s</td>
 <td style="text-align: right;">-43 %</td>
 </tr>
@@ -411,7 +462,7 @@
 <td style="text-align: right;">-17 %</td>
 </tr>
 <tr class="odd">
-<td><code>IORef</code></td>
+<td>Rock</td>
 <td style="text-align: right;">0.613 s</td>
 <td style="text-align: right;">-43 %</td>
 </tr>

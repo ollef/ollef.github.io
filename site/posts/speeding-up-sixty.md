@@ -159,39 +159,137 @@ effect of decreasing the number of garbage collections:
 
 Also note that the proportion of time used by the GC went from 20 % to 3 %.
 
-## Optimisation 2: Using `IORef`s instead of `MVar`s
+## Optimisation 2: A couple of Rock library improvements
+
+[Rock](https://github.com/ollef/rock) is a library that's used to implement
+query-based compilation in Sixty. I made two improvements to it to get these timings:
 
 |           | Time    | Delta |
 |-----------|--------:|------:|
 | Baseline  | 1.30 s  |       |
 | RTS flags | 1.08 s  | -17 % |
-| `IORef`   | 0.613 s | -43 % |
+| Rock      | 0.613 s | -43 % |
+
+The changes made were:
+
+* Using `IORef`s and atomic operations instead of `MVar`s:
+  Rock uses a cache, which is potentially accessed and updated from different
+  threads, to e.g. keep track of what queries have already been executed.
+  Before this change this state was stored in an `MVar`, but since it's only
+  doing fairly simple updates, the atomic operations of
+  `IORef` are sufficient.
+* Being a bit more clever about the automatic parallelisation:
+  At this point in time Rock used a
+  [Haxl](https://github.com/facebook/Haxl)-like automatic parallelisation scheme, running
+  queries done in an `Applicative` context in parallel.
+  The change here is to only trigger parallel query execution if both queries
+  are not already cached.  Before this change even the cache lookup part of the
+  queries was done in parallel, which is likely far too fine-grained to pay
+  off.
 
 [comment]: <> ([![](../images/speeding-up-sixty/1-f8d4ee7ee0d3d617c6d30401592f5639be60b14a.svg)](../images/speeding-up-sixty/1-f8d4ee7ee0d3d617c6d30401592f5639be60b14a.svg))
-[comment]: <> ([![](../images/speeding-up-sixty/2-54b87689f345173dbed3510a396641cd8c5e43f2.svg)](../images/speeding-up-sixty/2-54b87689f345173dbed3510a396641cd8c5e43f2.svg))
+
+We can see quite clearly in ThreadScope that the parallelisation has a seemingly good effect
+for part of the runtime, but not all of it:
 
 [![](../images/speeding-up-sixty/2-54b87689f345173dbed3510a396641cd8c5e43f2-threadscope.png)](../images/speeding-up-sixty/2-54b87689f345173dbed3510a396641cd8c5e43f2-threadscope.png)
 
 ## Optimisation 3: Manual query parallelisation
 
+To improve the parallelism, I removed the automatic parallelism support from
+the Rock library, and started doing it manually instead.
+
+The following results are from simply processing all input modules in parallel,
+using a pooling to keep the number of threads the same as the number
+of threads on the machine it's run on:
+
 |                          | Time    | Delta |
 |--------------------------|--------:|------:|
 | Baseline                 | 1.30 s  |       |
 | RTS flags                | 1.08 s  | -17 % |
-| `IORef`                  | 0.613 s | -43 % |
+| Rock                     | 0.613 s | -43 % |
 | Manual parallelisation   | 0.451 s | -26 % |
+
+Being able to do this is an advantage of using a query-based architecture.
+The modules can be processed in any order, and any non-processed dependencies that are missing
+are processed and cached on a need basis.
+
+ThreadScope shows that the CPU core utilisation is improved, even
+though the timings aren't as much better as one might expect from seeing the change:
 
 [![](../images/speeding-up-sixty/4-7ca773e347dae952d4c7249a0310f10077a2474b-threadscope.png)](../images/speeding-up-sixty/4-7ca773e347dae952d4c7249a0310f10077a2474b-threadscope.png)
 
 ## Optimisation 4: Parser lookahead
 
+Here's an experiment that only helped a little. I noticed that parsing took
+quite a large proportion of the total time spent, about 15 %, which can be seen
+in the top-right part of the flamegraph:
+
+[![](../images/speeding-up-sixty/4-7ca773e347dae952d4c7249a0310f10077a2474b.svg)](../images/speeding-up-sixty/4-7ca773e347dae952d4c7249a0310f10077a2474b.svg)
+
+The parser is written using parsing combinators, and the "inner loop" of e.g.
+the term parser is a choice between a bunch of different alternatives. Something like this:
+
+```haskell
+term :: Parser Term
+term =
+  parenthesizedTerm    -- (t)
+  <|> letExpression    -- let x = t in t
+  <|> caseExpression   -- case t of branches
+  <|> lambdaExpression -- \x. t
+  <|> forallExpression -- forall x. t
+  <|> var              -- x
+```
+
+These alternatives are tried in order in the parser, which means that to reach
+e.g. the `forall` case, the parser will have tried to parse the first token of
+each of the four preceding alternatives. But note that the first character of
+each alternative rules out all other cases, save for (sometimes) the `var`
+case.
+
+So the idea was to rewrite the parser like this:
+
+```haskell
+term :: Parser Term
+term = do
+  firstChar <- lookAhead anyChar
+  case firstChar of
+    '(' ->
+      parenthesizedTerm
+
+    'l' ->
+      letExpression
+      <|> var
+
+    'c' ->
+      caseExpression
+      <|> var
+
+    '\\' ->
+      lambdaExpression
+
+    'f' ->
+      forallExpression
+      <|> var
+
+    _ ->
+      var
+```
+
+Now we just have to look at the first character to rule out the first four
+alternatives when parsing a `forall`.
+
+Here are the results:
+
 |                          | Time    | Delta |
 |--------------------------|--------:|------:|
 | Baseline                 | 1.30 s  |       |
 | RTS flags                | 1.08 s  | -17 % |
-| `IORef`                  | 0.613 s | -43 % |
+| Rock                     | 0.613 s | -43 % |
 | Manual parallelisation   | 0.451 s | -26 % |
 | Parser lookahead         | 0.442 s |  -2 % |
+
+Not great, but it's something.
 
 ## Optimisation 5: Dependent hashmap
 
@@ -199,7 +297,7 @@ Also note that the proportion of time used by the GC went from 20 % to 3 %.
 |--------------------------|--------:|------:|
 | Baseline                 | 1.30 s  |       |
 | RTS flags                | 1.08 s  | -17 % |
-| `IORef`                  | 0.613 s | -43 % |
+| Rock                     | 0.613 s | -43 % |
 | Manual parallelisation   | 0.451 s | -26 % |
 | Parser lookahead         | 0.442 s |  -2 % |
 | Dependent hashmap        | 0.257 s | -42 % |
@@ -213,7 +311,7 @@ Also note that the proportion of time used by the GC went from 20 % to 3 %.
 |--------------------------|--------:|------:|
 | Baseline                 | 1.30 s  |       |
 | RTS flags                | 1.08 s  | -17 % |
-| `IORef`                  | 0.613 s | -43 % |
+| Rock                     | 0.613 s | -43 % |
 | Manual parallelisation   | 0.451 s | -26 % |
 | Parser lookahead         | 0.442 s |  -2 % |
 | Dependent hashmap        | 0.257 s | -42 % |
@@ -227,7 +325,7 @@ Also note that the proportion of time used by the GC went from 20 % to 3 %.
 |--------------------------|--------:|------:|
 | Baseline                 | 1.30 s  |       |
 | RTS flags                | 1.08 s  | -17 % |
-| `IORef`                  | 0.613 s | -43 % |
+| Rock                     | 0.613 s | -43 % |
 | Manual parallelisation   | 0.451 s | -26 % |
 | Parser lookahead         | 0.442 s |  -2 % |
 | Dependent hashmap        | 0.257 s | -42 % |
@@ -242,7 +340,7 @@ Also note that the proportion of time used by the GC went from 20 % to 3 %.
 |--------------------------|--------:|------:|
 | Baseline                 | 1.30 s  |       |
 | RTS flags                | 1.08 s  | -17 % |
-| `IORef`                  | 0.613 s | -43 % |
+| Rock                     | 0.613 s | -43 % |
 | Manual parallelisation   | 0.451 s | -26 % |
 | Parser lookahead         | 0.442 s |  -2 % |
 | Dependent hashmap        | 0.257 s | -42 % |
