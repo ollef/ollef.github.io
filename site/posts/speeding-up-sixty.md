@@ -13,23 +13,23 @@ I'm working on a reimplementation of [Sixten](https://github.com/ollef/sixten),
 a dependently typed programming language that supports unboxed data. The
 reimplementation currently lives in a separate repository, and is called
 [Sixty](https://github.com/ollef/sixty), though the intention is that it
-should eventually replace Sixten.  The main reason for reimplementing it was to
+going to replace Sixten eventually.  The main reason for reimplementing it was to
 try out some implementation techniques to make the type checker faster,
 inspired by András Kovács' [smalltt](https://github.com/AndrasKovacs/smalltt).
 
-In this post I'd like to show some optimisations that I did to Sixty.  I will
-also show the workflow that I use when profiling Haskell code.
+In this post I'd like to show some optimisations that I did, guided by
+profiling.  I will also show the workflow and tools that I use when profiling Haskell
+code.
 
 ## A benchmark
 
-I was curious to see how Sixty, a reimplementation of the Sixten compiler,
-would handle programs with many modules.  The problem is that no one has ever
-written a large program in Sixten so far.
+I was curious to see how Sixty would handle programs with many modules.  The
+problem is that no one has ever written any large programs in the Sixten
+language so far.
 
-As a substitute, I added a command to Sixty to generate nonsense programs of a
-given size. The programs that we'll be using in this post consist of 100
-modules, with just over 10 000 lines of code in total, that all look like
-this:
+As a substitute, I added a command to generate nonsense programs of a given
+size. The programs that are used in this post consist of just over 10 000 lines
+divided into 100 modules that all look like this:
 
 ```haskell
 module Module60 exposing (..)
@@ -70,8 +70,8 @@ I use three main tools to try to identify bottlenecks and other things to improv
 
 * [bench](http://www.haskellforall.com/2016/05/a-command-line-benchmark-tool.html)
     is a replacement for the Unix `time` command that I use to get more reliable
-    timings, which is especially useful for comparing the before and after time of
-    some change.
+    timings, which is especially useful for comparing the speed of a program
+    before and after some change.
 * GHC's built-in profiling support, which gives us a detailed breakdown of where
   time is spent when running the program.
 

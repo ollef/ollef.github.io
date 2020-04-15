@@ -44,11 +44,11 @@
     </div>
     <article class="post">
         <h2 id="background">Background</h2>
-<p>I'm working on a reimplementation of <a href="https://github.com/ollef/sixten">Sixten</a>, a dependently typed programming language that supports unboxed data. The reimplementation currently lives in a separate repository, and is called <a href="https://github.com/ollef/sixty">Sixty</a>, though the intention is that it should eventually replace Sixten. The main reason for reimplementing it was to try out some implementation techniques to make the type checker faster, inspired by András Kovács' <a href="https://github.com/AndrasKovacs/smalltt">smalltt</a>.</p>
-<p>In this post I'd like to show some optimisations that I did to Sixty. I will also show the workflow that I use when profiling Haskell code.</p>
+<p>I'm working on a reimplementation of <a href="https://github.com/ollef/sixten">Sixten</a>, a dependently typed programming language that supports unboxed data. The reimplementation currently lives in a separate repository, and is called <a href="https://github.com/ollef/sixty">Sixty</a>, though the intention is that it going to replace Sixten eventually. The main reason for reimplementing it was to try out some implementation techniques to make the type checker faster, inspired by András Kovács' <a href="https://github.com/AndrasKovacs/smalltt">smalltt</a>.</p>
+<p>In this post I'd like to show some optimisations that I did, guided by profiling. I will also show the workflow and tools that I use when profiling Haskell code.</p>
 <h2 id="a-benchmark">A benchmark</h2>
-<p>I was curious to see how Sixty, a reimplementation of the Sixten compiler, would handle programs with many modules. The problem is that no one has ever written a large program in Sixten so far.</p>
-<p>As a substitute, I added a command to Sixty to generate nonsense programs of a given size. The programs that we'll be using in this post consist of 100 modules, with just over 10 000 lines of code in total, that all look like this:</p>
+<p>I was curious to see how Sixty would handle programs with many modules. The problem is that no one has ever written any large programs in the Sixten language so far.</p>
+<p>As a substitute, I added a command to generate nonsense programs of a given size. The programs that are used in this post consist of just over 10 000 lines divided into 100 modules that all look like this:</p>
 <div class="sourceCode" id="cb1"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb1-1"><a href="#cb1-1"></a><span class="kw">module</span> <span class="dt">Module60</span> exposing (<span class="op">..</span>)</span>
 <span id="cb1-2"><a href="#cb1-2"></a></span>
 <span id="cb1-3"><a href="#cb1-3"></a><span class="kw">import</span> <span class="dt">Module9</span></span>
@@ -76,7 +76,7 @@
 <h2 id="profiling">Profiling</h2>
 <p>I use three main tools to try to identify bottlenecks and other things to improve:</p>
 <ul>
-<li><p><a href="http://www.haskellforall.com/2016/05/a-command-line-benchmark-tool.html">bench</a> is a replacement for the Unix <code>time</code> command that I use to get more reliable timings, which is especially useful for comparing the before and after time of some change.</p></li>
+<li><p><a href="http://www.haskellforall.com/2016/05/a-command-line-benchmark-tool.html">bench</a> is a replacement for the Unix <code>time</code> command that I use to get more reliable timings, which is especially useful for comparing the speed of a program before and after some change.</p></li>
 <li><p>GHC's built-in profiling support, which gives us a detailed breakdown of where time is spent when running the program.</p>
 <p>When using Stack, we can build with profiling by issuing:</p>
 <div class="sourceCode" id="cb2"><pre class="sourceCode sh"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1"></a><span class="ex">stack</span> install --profile</span></code></pre></div>
