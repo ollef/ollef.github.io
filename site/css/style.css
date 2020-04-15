@@ -160,7 +160,7 @@ header {
   display: flex;
 }
 
-@media only screen and (max-width: 800px) {
+@media only screen and (max-width: 900px) {
   header {
     height: 3em;
     background: #2d2d2d;
