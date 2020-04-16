@@ -200,7 +200,7 @@ To improve the parallelism, I removed the automatic parallelism support from
 the Rock library, and started doing it manually instead.
 
 The following results are from simply processing all input modules in parallel,
-using a pooling to keep the number of threads the same as the number
+using pooling to keep the number of threads the same as the number
 of threads on the machine it's run on:
 
 |                          | Time    | Delta |
@@ -212,20 +212,26 @@ of threads on the machine it's run on:
 
 Being able to do this is an advantage of using a query-based architecture.
 The modules can be processed in any order, and any non-processed dependencies that are missing
-are processed and cached on a need basis.
+are processed and cached on an as-needed basis.
 
 ThreadScope shows that the CPU core utilisation is improved, even
 though the timings aren't as much better as one might expect from seeing the change:
 
 [![](../images/speeding-up-sixty/4-7ca773e347dae952d4c7249a0310f10077a2474b-threadscope.png)](../images/speeding-up-sixty/4-7ca773e347dae952d4c7249a0310f10077a2474b-threadscope.png)
 
-## Optimisation 4: Parser lookahead
-
-Here's an experiment that only helped a little. I noticed that parsing took
-quite a large proportion of the total time spent, about 15 %, which can be seen
-in the top-right part of the flamegraph:
+It's also interesting to look at the flamegraph, because the proportion of time
+that goes to parsing has gone down to about 17 % (without having made any
+changes to the parser), which can be seen in the top-right part of the image:
 
 [![](../images/speeding-up-sixty/4-7ca773e347dae952d4c7249a0310f10077a2474b.svg)](../images/speeding-up-sixty/4-7ca773e347dae952d4c7249a0310f10077a2474b.svg)
+
+This might indicate that that part of the compiler parallelises well.
+
+## Optimisation 4: Parser lookahead
+
+Here's an experiment that only helped a little. As we just saw, parsing still
+takes quite a large proportion of the total time spent, almost 17~%, so I
+wanted to make it faster.
 
 The parser is written using parsing combinators, and the "inner loop" of e.g.
 the term parser is a choice between a bunch of different alternatives. Something like this:
