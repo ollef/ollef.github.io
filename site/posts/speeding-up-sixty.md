@@ -299,6 +299,38 @@ Not great, but it's something.
 
 ## Optimisation 5: Dependent hashmap
 
+The following flamegraph shows that at this point, around 68 % of the time goes
+to operations on
+[`Data.Dependent.Map`](https://hackage.haskell.org/package/dependent-map):
+
+[![](../images/speeding-up-sixty/5-8ea6700415f1c46fb300571382ef438ae6082e8e.svg)](../images/speeding-up-sixty/5-8ea6700415f1c46fb300571382ef438ae6082e8e.svg)
+
+Note that this was 15 % when we started out, so this has become the bottleneck
+only because we've fixed several others.
+
+`Data.Dependent.Map` implements a kind of dictionary data structure that allows
+the type of values depend on the value of the key, which is crucial for caching
+the result of queries, where each query may return a different type.
+
+`Data.Dependent.Map` is implemented as a clone of `Data.Map` from the
+`containers` package, adding this kind of key-value dependency, so it's
+implemented as a binary tree and uses comparisons on the key type when doing
+insertions and lookups.
+
+In the flamegraph above we can also see that around 21 % of the time goes to
+comparing the `Query` type. The reason for this slowness is that queries often
+contain strings, because they're often on the form "get the type of [name]",
+and strings are slow to compare because you need to traverse at least part of
+the string for each comparison.
+
+It would be a better idea to use a hash map, because then the string usually
+only has to be traversed once to compute the hash, but the problem is that
+there is no _dependent_ hash map library in Haskell. Until now that is. I
+implemented a [dependent version of the standard
+`Data.HashMap`](https://github.com/ollef/dependent-hashmap) type from the
+`unordered-containers` as a thin wrapper around it.
+The results are as follows:
+
 |                          | Time    | Delta |
 |--------------------------|--------:|------:|
 | Baseline                 | 1.30 s  |       |
@@ -308,10 +340,48 @@ Not great, but it's something.
 | Parser lookahead         | 0.442 s |  -2 % |
 | Dependent hashmap        | 0.257 s | -42 % |
 
-[![](../images/speeding-up-sixty/5-8ea6700415f1c46fb300571382ef438ae6082e8e.svg)](../images/speeding-up-sixty/5-8ea6700415f1c46fb300571382ef438ae6082e8e.svg)
+Having a look at the flamegraph after this change, we can see that `HashMap`
+operations still take about 20 % of the total run time, but also that the main
+bottleneck is now the parser:
+
 [![](../images/speeding-up-sixty/6-722533c5d71871ca1aa6235fe79a53f33da99c36.svg)](../images/speeding-up-sixty/6-722533c5d71871ca1aa6235fe79a53f33da99c36.svg)
 
 ## Optimisation 6: `ReaderT`-based Rock library
+
+Here's one that wasn't obvious from the profiling, but that I mostly did by
+ear.
+
+I mentioned that the Rock library supported automatic parallelisation, but that
+I switched to doing it manually. A remnant from that was that the `Task` type
+in Rock, was implemented in a way that made supporting that possible. `Task` is
+a monad that allows fetching and which all query rules, and therefore the whole
+Sixty compiler, are written in.
+
+Before this change, `Task` was implemented roughly as follows:
+
+```haskell
+newtype Task query a = Task { unTask :: IO (Result query a) }
+
+data Result query a where
+  Done :: a -> Result query a
+  Fetch :: query a -> (a -> Task query b) -> Result query b
+```
+
+So to make a `Task` that fetches a query `q`, you need to create an `IO` action
+that returns a `Fetch q pure`. When doing automatic parallelisation, this allowed
+introspecting whether a `Task` wanted to do a fetch, such that independent fetches
+could be identified and run in parallel.
+
+But actually, since we no longer support automatic parallelisation, this type can now be
+implemented just as well as follows:
+
+```haskell
+newtype Task query a = Task { unTask :: ReaderT (Fetch query) IO a }
+
+newtype Fetch query = Fetch (forall a. query a -> IO a)
+```
+
+The `ReaderT`-based implementation turns out to be a bit faster:
 
 |                          | Time    | Delta |
 |--------------------------|--------:|------:|
@@ -323,7 +393,7 @@ Not great, but it's something.
 | Dependent hashmap        | 0.257 s | -42 % |
 | `ReaderT` in Rock        | 0.245 s |  -5 % |
 
-[![](../images/speeding-up-sixty/7-048d2cec50e9994a0b159a2383580e3df5dd2a7e.svg)](../images/speeding-up-sixty/7-048d2cec50e9994a0b159a2383580e3df5dd2a7e.svg)
+[comment]: <> ([![](../images/speeding-up-sixty/7-048d2cec50e9994a0b159a2383580e3df5dd2a7e.svg)](../images/speeding-up-sixty/7-048d2cec50e9994a0b159a2383580e3df5dd2a7e.svg))
 
 ## Optimisation 7: Separate lexer
 

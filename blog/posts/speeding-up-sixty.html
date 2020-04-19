@@ -300,6 +300,13 @@
 </table>
 <p>Not great, but it's something.</p>
 <h2 id="optimisation-5-dependent-hashmap">Optimisation 5: Dependent hashmap</h2>
+<p>The following flamegraph shows that at this point, around 68 % of the time goes to operations on <a href="https://hackage.haskell.org/package/dependent-map"><code>Data.Dependent.Map</code></a>:</p>
+<p><a href="../images/speeding-up-sixty/5-8ea6700415f1c46fb300571382ef438ae6082e8e.svg"><img src="../images/speeding-up-sixty/5-8ea6700415f1c46fb300571382ef438ae6082e8e.svg" /></a></p>
+<p>Note that this was 15 % when we started out, so this has become the bottleneck only because we've fixed several others.</p>
+<p><code>Data.Dependent.Map</code> implements a kind of dictionary data structure that allows the type of values depend on the value of the key, which is crucial for caching the result of queries, where each query may return a different type.</p>
+<p><code>Data.Dependent.Map</code> is implemented as a clone of <code>Data.Map</code> from the <code>containers</code> package, adding this kind of key-value dependency, so it's implemented as a binary tree and uses comparisons on the key type when doing insertions and lookups.</p>
+<p>In the flamegraph above we can also see that around 21 % of the time goes to comparing the <code>Query</code> type. The reason for this slowness is that queries often contain strings, because they're often on the form "get the type of [name]", and strings are slow to compare because you need to traverse at least part of the string for each comparison.</p>
+<p>It would be a better idea to use a hash map, because then the string usually only has to be traversed once to compute the hash, but the problem is that there is no <em>dependent</em> hash map library in Haskell. Until now that is. I implemented a <a href="https://github.com/ollef/dependent-hashmap">dependent version of the standard <code>Data.HashMap</code></a> type from the <code>unordered-containers</code> as a thin wrapper around it. The results are as follows:</p>
 <table>
 <thead>
 <tr class="header">
@@ -341,8 +348,23 @@
 </tr>
 </tbody>
 </table>
-<p><a href="../images/speeding-up-sixty/5-8ea6700415f1c46fb300571382ef438ae6082e8e.svg"><img src="../images/speeding-up-sixty/5-8ea6700415f1c46fb300571382ef438ae6082e8e.svg" /></a> <a href="../images/speeding-up-sixty/6-722533c5d71871ca1aa6235fe79a53f33da99c36.svg"><img src="../images/speeding-up-sixty/6-722533c5d71871ca1aa6235fe79a53f33da99c36.svg" /></a></p>
+<p>Having a look at the flamegraph after this change, we can see that <code>HashMap</code> operations still take about 20 % of the total run time, but also that the main bottleneck is now the parser:</p>
+<p><a href="../images/speeding-up-sixty/6-722533c5d71871ca1aa6235fe79a53f33da99c36.svg"><img src="../images/speeding-up-sixty/6-722533c5d71871ca1aa6235fe79a53f33da99c36.svg" /></a></p>
 <h2 id="optimisation-6-readert-based-rock-library">Optimisation 6: <code>ReaderT</code>-based Rock library</h2>
+<p>Here's one that wasn't obvious from the profiling, but that I mostly did by ear.</p>
+<p>I mentioned that the Rock library supported automatic parallelisation, but that I switched to doing it manually. A remnant from that was that the <code>Task</code> type in Rock, was implemented in a way that made supporting that possible. <code>Task</code> is a monad that allows fetching and which all query rules, and therefore the whole Sixty compiler, are written in.</p>
+<p>Before this change, <code>Task</code> was implemented roughly as follows:</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb7-1"><a href="#cb7-1"></a><span class="kw">newtype</span> <span class="dt">Task</span> query a <span class="ot">=</span> <span class="dt">Task</span> {<span class="ot"> unTask ::</span> <span class="dt">IO</span> (<span class="dt">Result</span> query a) }</span>
+<span id="cb7-2"><a href="#cb7-2"></a></span>
+<span id="cb7-3"><a href="#cb7-3"></a><span class="kw">data</span> <span class="dt">Result</span> query a <span class="kw">where</span></span>
+<span id="cb7-4"><a href="#cb7-4"></a>  <span class="dt">Done</span><span class="ot"> ::</span> a <span class="ot">-&gt;</span> <span class="dt">Result</span> query a</span>
+<span id="cb7-5"><a href="#cb7-5"></a>  <span class="dt">Fetch</span><span class="ot"> ::</span> query a <span class="ot">-&gt;</span> (a <span class="ot">-&gt;</span> <span class="dt">Task</span> query b) <span class="ot">-&gt;</span> <span class="dt">Result</span> query b</span></code></pre></div>
+<p>So to make a <code>Task</code> that fetches a query <code>q</code>, you need to create an <code>IO</code> action that returns a <code>Fetch q pure</code>. When doing automatic parallelisation, this allowed introspecting whether a <code>Task</code> wanted to do a fetch, such that independent fetches could be identified and run in parallel.</p>
+<p>But actually, since we no longer support automatic parallelisation, this type can now be implemented just as well as follows:</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb8-1"><a href="#cb8-1"></a><span class="kw">newtype</span> <span class="dt">Task</span> query a <span class="ot">=</span> <span class="dt">Task</span> {<span class="ot"> unTask ::</span> <span class="dt">ReaderT</span> (<span class="dt">Fetch</span> query) <span class="dt">IO</span> a }</span>
+<span id="cb8-2"><a href="#cb8-2"></a></span>
+<span id="cb8-3"><a href="#cb8-3"></a><span class="kw">newtype</span> <span class="dt">Fetch</span> query <span class="ot">=</span> <span class="dt">Fetch</span> (<span class="kw">forall</span> a<span class="op">.</span> query a <span class="ot">-&gt;</span> <span class="dt">IO</span> a)</span></code></pre></div>
+<p>The <code>ReaderT</code>-based implementation turns out to be a bit faster:</p>
 <table>
 <thead>
 <tr class="header">
@@ -389,7 +411,6 @@
 </tr>
 </tbody>
 </table>
-<p><a href="../images/speeding-up-sixty/7-048d2cec50e9994a0b159a2383580e3df5dd2a7e.svg"><img src="../images/speeding-up-sixty/7-048d2cec50e9994a0b159a2383580e3df5dd2a7e.svg" /></a></p>
 <h2 id="optimisation-7-separate-lexer">Optimisation 7: Separate lexer</h2>
 <table>
 <thead>
