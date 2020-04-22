@@ -412,6 +412,9 @@
 </tbody>
 </table>
 <h2 id="optimisation-7-separate-lexer">Optimisation 7: Separate lexer</h2>
+<p>Let's have a look at the flamegraph at this point in time: <a href="../images/speeding-up-sixty/7-048d2cec50e9994a0b159a2383580e3df5dd2a7e.svg"><img src="../images/speeding-up-sixty/7-048d2cec50e9994a0b159a2383580e3df5dd2a7e.svg" /></a></p>
+<p>The parser was now taking almost 30 % of the total run time. The parser was written using parser combinators that worked directly on characters, so it was also doing tokenisation on the fly. I've been wondering about the performance impact of this practice, since it's quite common at least in the Haskell world. So the change I made <a href="https://github.com/ollef/sixty/commit/11c46c5b03f26a66347d5f387bd4cdfd5f6de4a2">here</a> was to write a lexer that's separate from the parser, and then make the parser work on the list of tokens that the lexer spits out.</p>
+<p>This turned out to be a great idea:</p>
 <table>
 <thead>
 <tr class="header">
@@ -463,8 +466,10 @@
 </tr>
 </tbody>
 </table>
-<p><a href="../images/speeding-up-sixty/8-11c46c5b03f26a66347d5f387bd4cdfd5f6de4a2.svg"><img src="../images/speeding-up-sixty/8-11c46c5b03f26a66347d5f387bd4cdfd5f6de4a2.svg" /></a></p>
+<p>The "inner loop" of the parser that I tried optimising in the "Parser lookahead" step has now become a case expression on the next token, visible <a href="https://github.com/ollef/sixty/blob/11c46c5b03f26a66347d5f387bd4cdfd5f6de4a2/src/Parser.hs#L543-L581">here</a>.</p>
 <h2 id="optimisation-8-faster-hashing">Optimisation 8: Faster hashing</h2>
+<p>The flamegraph at this point contained mostly things I didn't really know what to do with, but there's one thing left, and that's hashing of queries, which now takes just short of 18 % of the total runtime: <a href="../images/speeding-up-sixty/8-11c46c5b03f26a66347d5f387bd4cdfd5f6de4a2.svg"><img src="../images/speeding-up-sixty/8-11c46c5b03f26a66347d5f387bd4cdfd5f6de4a2.svg" /></a></p>
+<p>The change I made <a href="https://github.com/ollef/sixty/commit/d5bad6f606450d0a2c8926072e7b4845d982b81f">here</a> was to write some <code>Hashable</code> instances by hand instead of deriving them, and to add some inlining pragmas. This gave about a 5 % speedup:</p>
 <table>
 <thead>
 <tr class="header">
@@ -521,8 +526,14 @@
 </tr>
 </tbody>
 </table>
-<p><a href="../images/speeding-up-sixty/9-d5bad6f606450d0a2c8926072e7b4845d982b81f.svg"><img src="../images/speeding-up-sixty/9-d5bad6f606450d0a2c8926072e7b4845d982b81f.svg" /></a> <a href="../images/speeding-up-sixty/9-d5bad6f606450d0a2c8926072e7b4845d982b81f-threadscope.png"><img src="../images/speeding-up-sixty/9-d5bad6f606450d0a2c8926072e7b4845d982b81f-threadscope.png" /></a></p>
+<p>The new flamegraph shows that query hashing is now down to around 11 % of the time. <a href="../images/speeding-up-sixty/9-d5bad6f606450d0a2c8926072e7b4845d982b81f.svg"><img src="../images/speeding-up-sixty/9-d5bad6f606450d0a2c8926072e7b4845d982b81f.svg" /></a></p>
 <h2 id="conclusion">Conclusion</h2>
+<p>The usual profile-before-optimising advice is good advice. We've got great profiling tools for Haskell, so there's no reason to be optimising in the dark.</p>
+<p>As a reminder, here's what the compiler looked like in ThreadScope to start with:</p>
+<p><a href="../images/speeding-up-sixty/0-29094e006d4c88f51d744b0fd26f3e2e18af3ce0-threadscope.png"><img src="../images/speeding-up-sixty/0-29094e006d4c88f51d744b0fd26f3e2e18af3ce0-threadscope.png" /></a></p>
+<p>Here's where we're at now:</p>
+<p><a href="../images/speeding-up-sixty/9-d5bad6f606450d0a2c8926072e7b4845d982b81f-threadscope.png"><img src="../images/speeding-up-sixty/9-d5bad6f606450d0a2c8926072e7b4845d982b81f-threadscope.png" /></a></p>
+<p>It looks faster and it <em>is</em> faster. Nine times faster.</p>
     </article>
 
 </div>

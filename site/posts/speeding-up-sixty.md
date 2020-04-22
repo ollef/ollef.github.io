@@ -393,9 +393,20 @@ The `ReaderT`-based implementation turns out to be a bit faster:
 | Dependent hashmap        | 0.257 s | -42 % |
 | `ReaderT` in Rock        | 0.245 s |  -5 % |
 
-[comment]: <> ([![](../images/speeding-up-sixty/7-048d2cec50e9994a0b159a2383580e3df5dd2a7e.svg)](../images/speeding-up-sixty/7-048d2cec50e9994a0b159a2383580e3df5dd2a7e.svg))
-
 ## Optimisation 7: Separate lexer
+
+Let's have a look at the flamegraph at this point in time:
+[![](../images/speeding-up-sixty/7-048d2cec50e9994a0b159a2383580e3df5dd2a7e.svg)](../images/speeding-up-sixty/7-048d2cec50e9994a0b159a2383580e3df5dd2a7e.svg)
+
+The parser was now taking almost 30 % of the total run time.
+The parser was written using parser combinators that worked directly on characters, so
+it was also doing tokenisation on the fly. I've been wondering about the performance
+impact of this practice, since it's quite common at least in the Haskell world.
+So the change I made [here](https://github.com/ollef/sixty/commit/11c46c5b03f26a66347d5f387bd4cdfd5f6de4a2)
+was to write a lexer that's separate from the parser, and then make the parser work on the list
+of tokens that the lexer spits out.
+
+This turned out to be a great idea:
 
 |                          | Time    | Delta |
 |--------------------------|--------:|------:|
@@ -408,9 +419,22 @@ The `ReaderT`-based implementation turns out to be a bit faster:
 | `ReaderT` in Rock        | 0.245 s |  -5 % |
 | Separate lexer           | 0.154 s | -37 % |
 
-[![](../images/speeding-up-sixty/8-11c46c5b03f26a66347d5f387bd4cdfd5f6de4a2.svg)](../images/speeding-up-sixty/8-11c46c5b03f26a66347d5f387bd4cdfd5f6de4a2.svg)
+The "inner loop" of the parser that I tried optimising in the "Parser
+lookahead" step has now become a case expression on the next token, visible
+[here](https://github.com/ollef/sixty/blob/11c46c5b03f26a66347d5f387bd4cdfd5f6de4a2/src/Parser.hs#L543-L581).
+
 
 ## Optimisation 8: Faster hashing
+
+The flamegraph at this point contained mostly things I didn't really know what
+to do with, but there's one thing left, and that's hashing of queries, which
+now takes just short of 18 % of the total runtime:
+[![](../images/speeding-up-sixty/8-11c46c5b03f26a66347d5f387bd4cdfd5f6de4a2.svg)](../images/speeding-up-sixty/8-11c46c5b03f26a66347d5f387bd4cdfd5f6de4a2.svg)
+
+The change I made
+[here](https://github.com/ollef/sixty/commit/d5bad6f606450d0a2c8926072e7b4845d982b81f)
+was to write some `Hashable` instances by hand instead of deriving them, and to
+add some inlining pragmas. This gave about a 5 % speedup:
 
 |                          | Time    | Delta |
 |--------------------------|--------:|------:|
@@ -424,7 +448,20 @@ The `ReaderT`-based implementation turns out to be a bit faster:
 | Separate lexer           | 0.154 s | -37 % |
 | Faster hashing           | 0.146 s |  -5 % |
 
+The new flamegraph shows that query hashing is now down to around 11 % of the time.
 [![](../images/speeding-up-sixty/9-d5bad6f606450d0a2c8926072e7b4845d982b81f.svg)](../images/speeding-up-sixty/9-d5bad6f606450d0a2c8926072e7b4845d982b81f.svg)
-[![](../images/speeding-up-sixty/9-d5bad6f606450d0a2c8926072e7b4845d982b81f-threadscope.png)](../images/speeding-up-sixty/9-d5bad6f606450d0a2c8926072e7b4845d982b81f-threadscope.png)
 
 ## Conclusion
+
+The usual profile-before-optimising advice is good advice.  We've got great
+profiling tools for Haskell, so there's no reason to be optimising in the dark.
+
+As a reminder, here's what the compiler looked like in ThreadScope to start with:
+
+[![](../images/speeding-up-sixty/0-29094e006d4c88f51d744b0fd26f3e2e18af3ce0-threadscope.png)](../images/speeding-up-sixty/0-29094e006d4c88f51d744b0fd26f3e2e18af3ce0-threadscope.png)
+
+Here's where we're at now:
+
+[![](../images/speeding-up-sixty/9-d5bad6f606450d0a2c8926072e7b4845d982b81f-threadscope.png)](../images/speeding-up-sixty/9-d5bad6f606450d0a2c8926072e7b4845d982b81f-threadscope.png)
+
+It looks faster and it _is_ faster. Nine times faster.
