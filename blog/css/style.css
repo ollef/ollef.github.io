@@ -86,7 +86,7 @@ h2 {
   width: 80%;
   margin: 0 auto 0;
   border-top: 1px solid #777;
-  margin-top: 1em;
+  margin-top: 3em;
   padding: 1em 0 0 0;
 }
 
@@ -229,7 +229,7 @@ footer {
   align-items: space-around;
   width: 100%;
   min-height: 400px;
-  padding: 2em 10px;
+  padding: 0 10px;
   text-align: center;
   margin: auto;
 }
@@ -268,7 +268,7 @@ footer {
   max-width: 720px;
   /*min-height: 100%;*/
   padding: 0px 20px;
-  margin: 3em auto;
+  margin: 0 auto;
   font-size: 1.1em;
 }
 
