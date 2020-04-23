@@ -24,11 +24,11 @@ optimise in Haskell programs such as Sixty.
 ## A benchmark
 
 What set me off was that I was curious to see how Sixty would handle programs
-with many modules.  The problem is that no one has ever written any large
-programs in the Sixten language so far.
+with many modules.  The problem was that no one had ever written any large
+programs in the language so far.
 
 As a substitute, I added a command to generate nonsense programs of a given
-size. The programs that I use for the benchmarks in this post consist of just over
+size. The programs that I used for the benchmarks in this post consist of just over
 10 000 lines divided into 100 modules that all look like this:
 
 ```haskell
@@ -60,7 +60,7 @@ f30 = Module37.f4 -> Module24.f24
 Each module is about 100 lines of code, of which a third or so are newlines,
 and has thirty definitions that refer to definitions from other modules.  The
 definitions are simple enough to be type checked very quickly, so the benchmark
-makes us focus mostly on parts of the compiler other than the type checker.
+makes us focus mostly on other parts of the compiler.
 
 I'd also like to write about the type checker itself, but will save that for
 another post.
@@ -71,7 +71,7 @@ I use three main tools to try to identify bottlenecks and other things to improv
 
 * [bench](http://www.haskellforall.com/2016/05/a-command-line-benchmark-tool.html)
     is a replacement for the Unix `time` command that I use to get more
-    reliable timings, which is especially useful for comparing the before and
+    reliable timings, especially useful for comparing the before and
     after time of some change.
 * GHC's built-in profiling support, which gives us a detailed breakdown of where
   time is spent when running the program.
@@ -166,7 +166,7 @@ which seems good to me.
 
 [Rock](https://github.com/ollef/rock) is a library that's used to implement
 query-based compilation in Sixty. I made two improvements to it that made Sixty
-almost twice as fast:
+almost twice as fast at the task:
 
 |           | Time    | Delta |
 |-----------|--------:|------:|
@@ -174,7 +174,7 @@ almost twice as fast:
 | RTS flags | 1.08 s  | -17 % |
 | Rock      | 0.613 s | -43 % |
 
-The changes made were:
+The changes are:
 
 * Using `IORef`s and atomic operations instead of `MVar`s:
   Rock uses a cache e.g. to keep track of what queries have already been executed.
