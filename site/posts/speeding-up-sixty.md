@@ -4,7 +4,7 @@ author: Olle Fredriksson
 date: 2020-04-23
 description: How I made the new Sixten compiler nine times faster
 image: speeding-up-sixty/9-d5bad6f606450d0a2c8926072e7b4845d982b81f-threadscope.png
-draft: true
+draft: false
 ---
 
 ## Background
