@@ -122,7 +122,7 @@
 <li>Garbage collection runs extremely often and takes just over 20 % of the time.</li>
 </ul>
 <h2 id="optimisation-1-better-rts-flags">Optimisation 1: Better RTS flags</h2>
-<p>As we saw in the ThreadScope output, garbage collection ran often and took a large part of the total runtime of the type checker.</p>
+<p>As we saw in the ThreadScope output, garbage collection runs often and takes a large part of the total runtime of the type checker.</p>
 <p>In <a href="https://github.com/ollef/sixty/tree/f8d4ee7ee0d3d617c6d30401592f5639be60b14a">this commit</a> I most notably introduce the RTS option <code>-A50m</code>, which sets the default allocation area size used by the garbage collector to 50 MB, instead of the default 1 MB, which means that GC can run less often, potentially at the cost of worse cache behaviour and memory use. The value <code>50m</code> was found to be the sweet spot for performance on my machine by trying some different values.</p>
 <p>The result of this change is this:</p>
 <table>
@@ -150,7 +150,7 @@
 <p><a href="../images/speeding-up-sixty/1-f8d4ee7ee0d3d617c6d30401592f5639be60b14a-threadscope.png"><img src="../images/speeding-up-sixty/1-f8d4ee7ee0d3d617c6d30401592f5639be60b14a-threadscope.png" /></a></p>
 <p>Also note that the proportion of time used by the GC went from 20 % to 3 %, which seems good to me.</p>
 <h2 id="optimisation-2-a-couple-of-rock-library-improvements">Optimisation 2: A couple of Rock library improvements</h2>
-<p><a href="https://github.com/ollef/rock">Rock</a> is a library that's used to implement query-based compilation in Sixty. I made two improvements to, that made Sixty almost twice as fast:</p>
+<p><a href="https://github.com/ollef/rock">Rock</a> is a library that's used to implement query-based compilation in Sixty. I made two improvements to it that made Sixty almost twice as fast:</p>
 <table>
 <thead>
 <tr class="header">
@@ -187,7 +187,7 @@
 <p>Sadly I didn't update Sixty in between the two changes, so I don't really know how much each one contributes.</p>
 <h2 id="optimisation-3-manual-query-parallelisation">Optimisation 3: Manual query parallelisation</h2>
 <p>I wasn't quite happy with the automatic parallelism since it mostly resulted in sequential execution. To improve on that, I removed the automatic parallelism support from the Rock library, and started doing it manually instead.</p>
-<p>The following timing is from processing all input modules in parallel, using pooling to keep the number of threads the same as the number of cores on the machine it's run on:</p>
+<p>The following timing is from <a href="https://github.com/ollef/sixty/commit/7ca773e347dae952d4c7249a0310f10077a2474b">this commit</a> where all input modules are processed in parallel, using pooling to keep the number of threads the same as the number of cores on the machine it's run on:</p>
 <table>
 <thead>
 <tr class="header">
@@ -532,12 +532,12 @@
 </table>
 <p>The new flamegraph shows that query hashing is now down to around 11 % of the time. <a href="../images/speeding-up-sixty/9-d5bad6f606450d0a2c8926072e7b4845d982b81f.svg"><img src="../images/speeding-up-sixty/9-d5bad6f606450d0a2c8926072e7b4845d982b81f.svg" /></a></p>
 <h2 id="conclusion">Conclusion</h2>
-<p>We've got great profiling tools for Haskell, so there's no reason to be optimising in the dark. The usual profile-before-optimising advice is good advice.</p>
+<p>I was able to make the Sixty compiler nine times faster for this benchmark. This was made possible by the excellent profiling tools that we have for Haskell. There's no reason to be optimising in the dark here.</p>
 <p>As a reminder, here's what the compiler looked like in ThreadScope to start with:</p>
 <p><a href="../images/speeding-up-sixty/0-29094e006d4c88f51d744b0fd26f3e2e18af3ce0-threadscope.png"><img src="../images/speeding-up-sixty/0-29094e006d4c88f51d744b0fd26f3e2e18af3ce0-threadscope.png" /></a></p>
 <p>Here's where we're at now:</p>
 <p><a href="../images/speeding-up-sixty/9-d5bad6f606450d0a2c8926072e7b4845d982b81f-threadscope.png"><img src="../images/speeding-up-sixty/9-d5bad6f606450d0a2c8926072e7b4845d982b81f-threadscope.png" /></a></p>
-<p>It looks faster and it <em>is</em> faster. Nine times faster.</p>
+<p>It looks faster and it <em>is</em> faster.</p>
     </article>
 
 </div>

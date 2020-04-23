@@ -135,7 +135,7 @@ I note the following in the ThreadScope output:
 
 ## Optimisation 1: Better RTS flags
 
-As we saw in the ThreadScope output, garbage collection ran often and took a
+As we saw in the ThreadScope output, garbage collection runs often and takes a
 large part of the total runtime of the type checker.
 
 In [this
@@ -165,7 +165,7 @@ which seems good to me.
 ## Optimisation 2: A couple of Rock library improvements
 
 [Rock](https://github.com/ollef/rock) is a library that's used to implement
-query-based compilation in Sixty. I made two improvements to, that made Sixty
+query-based compilation in Sixty. I made two improvements to it that made Sixty
 almost twice as fast:
 
 |           | Time    | Delta |
@@ -207,7 +207,8 @@ I wasn't quite happy with the automatic parallelism since it mostly resulted in
 sequential execution. To improve on that, I removed the automatic parallelism
 support from the Rock library, and started doing it manually instead.
 
-The following timing is from processing all input modules in parallel,
+The following timing is from [this commit](https://github.com/ollef/sixty/commit/7ca773e347dae952d4c7249a0310f10077a2474b)
+where all input modules are processed in parallel,
 using pooling to keep the number of threads the same as the number
 of cores on the machine it's run on:
 
@@ -463,9 +464,9 @@ The new flamegraph shows that query hashing is now down to around 11 % of the t
 
 ## Conclusion
 
-We've got great profiling tools for Haskell, so there's no reason to be
-optimising in the dark.  The usual profile-before-optimising advice is good
-advice.  
+I was able to make the Sixty compiler nine times faster for this benchmark.
+This was made possible by the excellent profiling tools that we have for Haskell.
+There's no reason to be optimising in the dark here.
 
 As a reminder, here's what the compiler looked like in ThreadScope to start with:
 
@@ -475,4 +476,4 @@ Here's where we're at now:
 
 [![](../images/speeding-up-sixty/9-d5bad6f606450d0a2c8926072e7b4845d982b81f-threadscope.png)](../images/speeding-up-sixty/9-d5bad6f606450d0a2c8926072e7b4845d982b81f-threadscope.png)
 
-It looks faster and it _is_ faster. Nine times faster.
+It looks faster and it _is_ faster.
