@@ -47,8 +47,8 @@
 <p>I'm working on a reimplementation of <a href="https://github.com/ollef/sixten">Sixten</a>, a dependently typed programming language that supports unboxed data. The reimplementation currently lives in a separate repository, and is called <a href="https://github.com/ollef/sixty">Sixty</a>, though the intention is that it going to replace Sixten eventually. The main reason for doing a reimplementation is to try out some implementation techniques to make the type checker faster, inspired by András Kovács' <a href="https://github.com/AndrasKovacs/smalltt">smalltt</a>.</p>
 <p>In this post I'm going to show some optimisations that I implemented recently. I will also show the workflow and profiling tools that I use to find <em>what</em> to optimise in Haskell programs such as Sixty.</p>
 <h2 id="a-benchmark">A benchmark</h2>
-<p>What set me off was that I was curious to see how Sixty would handle programs with many modules. The problem is that no one has ever written any large programs in the Sixten language so far.</p>
-<p>As a substitute, I added a command to generate nonsense programs of a given size. The programs that I use for the benchmarks in this post consist of just over 10 000 lines divided into 100 modules that all look like this:</p>
+<p>What set me off was that I was curious to see how Sixty would handle programs with many modules. The problem was that no one had ever written any large programs in the language so far.</p>
+<p>As a substitute, I added a command to generate nonsense programs of a given size. The programs that I used for the benchmarks in this post consist of just over 10 000 lines divided into 100 modules that all look like this:</p>
 <div class="sourceCode" id="cb1"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb1-1"><a href="#cb1-1"></a><span class="kw">module</span> <span class="dt">Module60</span> exposing (<span class="op">..</span>)</span>
 <span id="cb1-2"><a href="#cb1-2"></a></span>
 <span id="cb1-3"><a href="#cb1-3"></a><span class="kw">import</span> <span class="dt">Module9</span></span>
@@ -72,12 +72,12 @@
 <span id="cb1-21"><a href="#cb1-21"></a></span>
 <span id="cb1-22"><a href="#cb1-22"></a>f30 <span class="op">:</span> <span class="dt">Type</span></span>
 <span id="cb1-23"><a href="#cb1-23"></a>f30 <span class="ot">=</span> Module37.f4 <span class="ot">-&gt;</span> Module24.f24</span></code></pre></div>
-<p>Each module is about 100 lines of code, of which a third or so are newlines, and has thirty definitions that refer to definitions from other modules. The definitions are simple enough to be type checked very quickly, so the benchmark makes us focus mostly on parts of the compiler other than the type checker.</p>
+<p>Each module is about 100 lines of code, of which a third or so are newlines, and has thirty definitions that refer to definitions from other modules. The definitions are simple enough to be type checked very quickly, so the benchmark makes us focus mostly on other parts of the compiler.</p>
 <p>I'd also like to write about the type checker itself, but will save that for another post.</p>
 <h2 id="profiling">Profiling</h2>
 <p>I use three main tools to try to identify bottlenecks and other things to improve:</p>
 <ul>
-<li><p><a href="http://www.haskellforall.com/2016/05/a-command-line-benchmark-tool.html">bench</a> is a replacement for the Unix <code>time</code> command that I use to get more reliable timings, which is especially useful for comparing the before and after time of some change.</p></li>
+<li><p><a href="http://www.haskellforall.com/2016/05/a-command-line-benchmark-tool.html">bench</a> is a replacement for the Unix <code>time</code> command that I use to get more reliable timings, especially useful for comparing the before and after time of some change.</p></li>
 <li><p>GHC's built-in profiling support, which gives us a detailed breakdown of where time is spent when running the program.</p>
 <p>When using Stack, we can build with profiling by issuing:</p>
 <div class="sourceCode" id="cb2"><pre class="sourceCode sh"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1"></a><span class="ex">stack</span> install --profile</span></code></pre></div>
@@ -150,7 +150,7 @@
 <p><a href="../images/speeding-up-sixty/1-f8d4ee7ee0d3d617c6d30401592f5639be60b14a-threadscope.png"><img src="../images/speeding-up-sixty/1-f8d4ee7ee0d3d617c6d30401592f5639be60b14a-threadscope.png" /></a></p>
 <p>Also note that the proportion of time used by the GC went from 20 % to 3 %, which seems good to me.</p>
 <h2 id="optimisation-2-a-couple-of-rock-library-improvements">Optimisation 2: A couple of Rock library improvements</h2>
-<p><a href="https://github.com/ollef/rock">Rock</a> is a library that's used to implement query-based compilation in Sixty. I made two improvements to it that made Sixty almost twice as fast:</p>
+<p><a href="https://github.com/ollef/rock">Rock</a> is a library that's used to implement query-based compilation in Sixty. I made two improvements to it that made Sixty almost twice as fast at the task:</p>
 <table>
 <thead>
 <tr class="header">
@@ -177,7 +177,7 @@
 </tr>
 </tbody>
 </table>
-<p>The changes made were:</p>
+<p>The changes are:</p>
 <ul>
 <li>Using <code>IORef</code>s and atomic operations instead of <code>MVar</code>s: Rock uses a cache e.g. to keep track of what queries have already been executed. This cache is potentially accessed and updated from different threads. Before this change this state was stored in an <code>MVar</code>, but since it's only doing fairly simple updates, the atomic operations of <code>IORef</code> are sufficient.</li>
 <li>Being a bit more clever about the automatic parallelisation: We'll get back to this, but at this point in time Rock uses a <a href="https://github.com/facebook/Haxl">Haxl</a>-like automatic parallelisation scheme, running queries done in an <code>Applicative</code> context in parallel. The change here is to only trigger parallel query execution if both queries are not already cached. Before this change even the cache lookup part of the queries was done in parallel, which is likely far too fine-grained to pay off.</li>
