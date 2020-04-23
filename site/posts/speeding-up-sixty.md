@@ -207,10 +207,29 @@ I wasn't quite happy with the automatic parallelism since it mostly resulted in
 sequential execution. To improve on that, I removed the automatic parallelism
 support from the Rock library, and started doing it manually instead.
 
-The following timing is from [this commit](https://github.com/ollef/sixty/commit/7ca773e347dae952d4c7249a0310f10077a2474b)
-where all input modules are processed in parallel,
-using pooling to keep the number of threads the same as the number
-of cores on the machine it's run on:
+Code wise [this change is quite
+small](https://github.com/ollef/sixty/commit/7ca773e347dae952d4c7249a0310f10077a2474b).
+It's going from
+
+```haskell
+checkAll = do
+  inputFiles <- fetch Query.InputFiles
+  forM_ inputFiles checkFile
+```
+
+to
+
+```haskell
+checkAll = do
+  inputFiles <- fetch Query.InputFiles
+  pooledForConcurrently_ inputFiles checkFile
+```
+
+where `pooledForConcurrently_` is a variant of `forM_` that runs in parallel,
+using pooling to keep the number of threads the same as the number of cores on
+the machine it's run on.
+
+Here are the timings:
 
 |                          | Time    | Delta |
 |--------------------------|--------:|------:|
@@ -219,9 +238,10 @@ of cores on the machine it's run on:
 | Rock                     | 0.613 s | -43 % |
 | Manual parallelisation   | 0.451 s | -26 % |
 
-Being able to do this seems to be a great advantage of using a query-based
-architecture.  The modules can be processed in any order, and any non-processed
-dependencies that are missing are processed and cached on an as-needed basis.
+Being able to do type check modules in parallel on a whim this seems to be a
+great advantage of using a query-based architecture.  The modules can be
+processed in any order, and any non-processed dependencies that are missing are
+processed and cached on an as-needed basis.
 
 ThreadScope shows that the CPU core utilisation is improved, even
 though the timings aren't as much better as one might expect from the image:

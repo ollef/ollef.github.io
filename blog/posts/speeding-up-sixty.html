@@ -187,7 +187,16 @@
 <p>Sadly I didn't update Sixty in between the two changes, so I don't really know how much each one contributes.</p>
 <h2 id="optimisation-3-manual-query-parallelisation">Optimisation 3: Manual query parallelisation</h2>
 <p>I wasn't quite happy with the automatic parallelism since it mostly resulted in sequential execution. To improve on that, I removed the automatic parallelism support from the Rock library, and started doing it manually instead.</p>
-<p>The following timing is from <a href="https://github.com/ollef/sixty/commit/7ca773e347dae952d4c7249a0310f10077a2474b">this commit</a> where all input modules are processed in parallel, using pooling to keep the number of threads the same as the number of cores on the machine it's run on:</p>
+<p>Code wise <a href="https://github.com/ollef/sixty/commit/7ca773e347dae952d4c7249a0310f10077a2474b">this change is quite small</a>. It's going from</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb5-1"><a href="#cb5-1"></a>checkAll <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb5-2"><a href="#cb5-2"></a>  inputFiles <span class="ot">&lt;-</span> fetch <span class="dt">Query.InputFiles</span></span>
+<span id="cb5-3"><a href="#cb5-3"></a>  forM_ inputFiles checkFile</span></code></pre></div>
+<p>to</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb6-1"><a href="#cb6-1"></a>checkAll <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb6-2"><a href="#cb6-2"></a>  inputFiles <span class="ot">&lt;-</span> fetch <span class="dt">Query.InputFiles</span></span>
+<span id="cb6-3"><a href="#cb6-3"></a>  pooledForConcurrently_ inputFiles checkFile</span></code></pre></div>
+<p>where <code>pooledForConcurrently_</code> is a variant of <code>forM_</code> that runs in parallel, using pooling to keep the number of threads the same as the number of cores on the machine it's run on.</p>
+<p>Here are the timings:</p>
 <table>
 <thead>
 <tr class="header">
@@ -219,7 +228,7 @@
 </tr>
 </tbody>
 </table>
-<p>Being able to do this seems to be a great advantage of using a query-based architecture. The modules can be processed in any order, and any non-processed dependencies that are missing are processed and cached on an as-needed basis.</p>
+<p>Being able to do type check modules in parallel on a whim this seems to be a great advantage of using a query-based architecture. The modules can be processed in any order, and any non-processed dependencies that are missing are processed and cached on an as-needed basis.</p>
 <p>ThreadScope shows that the CPU core utilisation is improved, even though the timings aren't as much better as one might expect from the image:</p>
 <p><a href="../images/speeding-up-sixty/4-7ca773e347dae952d4c7249a0310f10077a2474b-threadscope.png"><img src="../images/speeding-up-sixty/4-7ca773e347dae952d4c7249a0310f10077a2474b-threadscope.png" /></a></p>
 <p>The flamegraph is also interesting, because the proportion of time that goes to parsing has gone down to about 17 % without having made any changes to the parser, which can be seen in the top-right part of the image:</p>
@@ -228,41 +237,41 @@
 <h2 id="optimisation-4-parser-lookahead">Optimisation 4: Parser lookahead</h2>
 <p>Here's an experiment that only helped a little. As we just saw, parsing still takes quite a large proportion of the total time spent, almost 17~%, so I wanted to make it faster.</p>
 <p>The parser is written using parsing combinators, and the "inner loop" of e.g. the term parser is a choice between a bunch of different alternatives. Something like this:</p>
-<div class="sourceCode" id="cb5"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb5-1"><a href="#cb5-1"></a><span class="ot">term ::</span> <span class="dt">Parser</span> <span class="dt">Term</span></span>
-<span id="cb5-2"><a href="#cb5-2"></a>term <span class="ot">=</span></span>
-<span id="cb5-3"><a href="#cb5-3"></a>  parenthesizedTerm    <span class="co">-- (t)</span></span>
-<span id="cb5-4"><a href="#cb5-4"></a>  <span class="op">&lt;|&gt;</span> letExpression    <span class="co">-- let x = t in t</span></span>
-<span id="cb5-5"><a href="#cb5-5"></a>  <span class="op">&lt;|&gt;</span> caseExpression   <span class="co">-- case t of branches</span></span>
-<span id="cb5-6"><a href="#cb5-6"></a>  <span class="op">&lt;|&gt;</span> lambdaExpression <span class="co">-- \x. t</span></span>
-<span id="cb5-7"><a href="#cb5-7"></a>  <span class="op">&lt;|&gt;</span> forallExpression <span class="co">-- forall x. t</span></span>
-<span id="cb5-8"><a href="#cb5-8"></a>  <span class="op">&lt;|&gt;</span> var              <span class="co">-- x</span></span></code></pre></div>
+<div class="sourceCode" id="cb7"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb7-1"><a href="#cb7-1"></a><span class="ot">term ::</span> <span class="dt">Parser</span> <span class="dt">Term</span></span>
+<span id="cb7-2"><a href="#cb7-2"></a>term <span class="ot">=</span></span>
+<span id="cb7-3"><a href="#cb7-3"></a>  parenthesizedTerm    <span class="co">-- (t)</span></span>
+<span id="cb7-4"><a href="#cb7-4"></a>  <span class="op">&lt;|&gt;</span> letExpression    <span class="co">-- let x = t in t</span></span>
+<span id="cb7-5"><a href="#cb7-5"></a>  <span class="op">&lt;|&gt;</span> caseExpression   <span class="co">-- case t of branches</span></span>
+<span id="cb7-6"><a href="#cb7-6"></a>  <span class="op">&lt;|&gt;</span> lambdaExpression <span class="co">-- \x. t</span></span>
+<span id="cb7-7"><a href="#cb7-7"></a>  <span class="op">&lt;|&gt;</span> forallExpression <span class="co">-- forall x. t</span></span>
+<span id="cb7-8"><a href="#cb7-8"></a>  <span class="op">&lt;|&gt;</span> var              <span class="co">-- x</span></span></code></pre></div>
 <p>These alternatives are tried in order, which means that to reach e.g. the <code>forall</code> case, the parser will try to parse the first token of each of the four preceding alternatives.</p>
 <p>But note that the first character of each alternative rules out all other cases, save for (sometimes) the <code>var</code> case.</p>
 <p>So the idea here is to rewrite the parser like this:</p>
-<div class="sourceCode" id="cb6"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb6-1"><a href="#cb6-1"></a><span class="ot">term ::</span> <span class="dt">Parser</span> <span class="dt">Term</span></span>
-<span id="cb6-2"><a href="#cb6-2"></a>term <span class="ot">=</span> <span class="kw">do</span></span>
-<span id="cb6-3"><a href="#cb6-3"></a>  firstChar <span class="ot">&lt;-</span> lookAhead anyChar</span>
-<span id="cb6-4"><a href="#cb6-4"></a>  <span class="kw">case</span> firstChar <span class="kw">of</span></span>
-<span id="cb6-5"><a href="#cb6-5"></a>    <span class="ch">&#39;(&#39;</span> <span class="ot">-&gt;</span></span>
-<span id="cb6-6"><a href="#cb6-6"></a>      parenthesizedTerm</span>
-<span id="cb6-7"><a href="#cb6-7"></a></span>
-<span id="cb6-8"><a href="#cb6-8"></a>    <span class="ch">&#39;l&#39;</span> <span class="ot">-&gt;</span></span>
-<span id="cb6-9"><a href="#cb6-9"></a>      letExpression</span>
-<span id="cb6-10"><a href="#cb6-10"></a>      <span class="op">&lt;|&gt;</span> var</span>
-<span id="cb6-11"><a href="#cb6-11"></a></span>
-<span id="cb6-12"><a href="#cb6-12"></a>    <span class="ch">&#39;c&#39;</span> <span class="ot">-&gt;</span></span>
-<span id="cb6-13"><a href="#cb6-13"></a>      caseExpression</span>
-<span id="cb6-14"><a href="#cb6-14"></a>      <span class="op">&lt;|&gt;</span> var</span>
-<span id="cb6-15"><a href="#cb6-15"></a></span>
-<span id="cb6-16"><a href="#cb6-16"></a>    <span class="ch">&#39;\\&#39;</span> <span class="ot">-&gt;</span></span>
-<span id="cb6-17"><a href="#cb6-17"></a>      lambdaExpression</span>
-<span id="cb6-18"><a href="#cb6-18"></a></span>
-<span id="cb6-19"><a href="#cb6-19"></a>    <span class="ch">&#39;f&#39;</span> <span class="ot">-&gt;</span></span>
-<span id="cb6-20"><a href="#cb6-20"></a>      forallExpression</span>
-<span id="cb6-21"><a href="#cb6-21"></a>      <span class="op">&lt;|&gt;</span> var</span>
-<span id="cb6-22"><a href="#cb6-22"></a></span>
-<span id="cb6-23"><a href="#cb6-23"></a>    _ <span class="ot">-&gt;</span></span>
-<span id="cb6-24"><a href="#cb6-24"></a>      var</span></code></pre></div>
+<div class="sourceCode" id="cb8"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb8-1"><a href="#cb8-1"></a><span class="ot">term ::</span> <span class="dt">Parser</span> <span class="dt">Term</span></span>
+<span id="cb8-2"><a href="#cb8-2"></a>term <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb8-3"><a href="#cb8-3"></a>  firstChar <span class="ot">&lt;-</span> lookAhead anyChar</span>
+<span id="cb8-4"><a href="#cb8-4"></a>  <span class="kw">case</span> firstChar <span class="kw">of</span></span>
+<span id="cb8-5"><a href="#cb8-5"></a>    <span class="ch">&#39;(&#39;</span> <span class="ot">-&gt;</span></span>
+<span id="cb8-6"><a href="#cb8-6"></a>      parenthesizedTerm</span>
+<span id="cb8-7"><a href="#cb8-7"></a></span>
+<span id="cb8-8"><a href="#cb8-8"></a>    <span class="ch">&#39;l&#39;</span> <span class="ot">-&gt;</span></span>
+<span id="cb8-9"><a href="#cb8-9"></a>      letExpression</span>
+<span id="cb8-10"><a href="#cb8-10"></a>      <span class="op">&lt;|&gt;</span> var</span>
+<span id="cb8-11"><a href="#cb8-11"></a></span>
+<span id="cb8-12"><a href="#cb8-12"></a>    <span class="ch">&#39;c&#39;</span> <span class="ot">-&gt;</span></span>
+<span id="cb8-13"><a href="#cb8-13"></a>      caseExpression</span>
+<span id="cb8-14"><a href="#cb8-14"></a>      <span class="op">&lt;|&gt;</span> var</span>
+<span id="cb8-15"><a href="#cb8-15"></a></span>
+<span id="cb8-16"><a href="#cb8-16"></a>    <span class="ch">&#39;\\&#39;</span> <span class="ot">-&gt;</span></span>
+<span id="cb8-17"><a href="#cb8-17"></a>      lambdaExpression</span>
+<span id="cb8-18"><a href="#cb8-18"></a></span>
+<span id="cb8-19"><a href="#cb8-19"></a>    <span class="ch">&#39;f&#39;</span> <span class="ot">-&gt;</span></span>
+<span id="cb8-20"><a href="#cb8-20"></a>      forallExpression</span>
+<span id="cb8-21"><a href="#cb8-21"></a>      <span class="op">&lt;|&gt;</span> var</span>
+<span id="cb8-22"><a href="#cb8-22"></a></span>
+<span id="cb8-23"><a href="#cb8-23"></a>    _ <span class="ot">-&gt;</span></span>
+<span id="cb8-24"><a href="#cb8-24"></a>      var</span></code></pre></div>
 <p>Now we just have to look at the first character to rule out the first four alternatives when parsing a <code>forall</code>.</p>
 <p>Here are the results:</p>
 <table>
@@ -357,16 +366,16 @@
 <p>Here's one that wasn't obvious from the profiling that I did by ear.</p>
 <p>I mentioned that the Rock library used to support automatic parallelisation, but that I switched to doing it manually. A remnant from that was that the <code>Task</code> type in Rock was implemented in a needlessly inefficient way. <code>Task</code> is a monad that allows fetching queries, which the whole Sixty compiler is written in.</p>
 <p>Before this change, <code>Task</code> was implemented roughly as follows:</p>
-<div class="sourceCode" id="cb7"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb7-1"><a href="#cb7-1"></a><span class="kw">newtype</span> <span class="dt">Task</span> query a <span class="ot">=</span> <span class="dt">Task</span> {<span class="ot"> unTask ::</span> <span class="dt">IO</span> (<span class="dt">Result</span> query a) }</span>
-<span id="cb7-2"><a href="#cb7-2"></a></span>
-<span id="cb7-3"><a href="#cb7-3"></a><span class="kw">data</span> <span class="dt">Result</span> query a <span class="kw">where</span></span>
-<span id="cb7-4"><a href="#cb7-4"></a>  <span class="dt">Done</span><span class="ot"> ::</span> a <span class="ot">-&gt;</span> <span class="dt">Result</span> query a</span>
-<span id="cb7-5"><a href="#cb7-5"></a>  <span class="dt">Fetch</span><span class="ot"> ::</span> query a <span class="ot">-&gt;</span> (a <span class="ot">-&gt;</span> <span class="dt">Task</span> query b) <span class="ot">-&gt;</span> <span class="dt">Result</span> query b</span></code></pre></div>
+<div class="sourceCode" id="cb9"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb9-1"><a href="#cb9-1"></a><span class="kw">newtype</span> <span class="dt">Task</span> query a <span class="ot">=</span> <span class="dt">Task</span> {<span class="ot"> unTask ::</span> <span class="dt">IO</span> (<span class="dt">Result</span> query a) }</span>
+<span id="cb9-2"><a href="#cb9-2"></a></span>
+<span id="cb9-3"><a href="#cb9-3"></a><span class="kw">data</span> <span class="dt">Result</span> query a <span class="kw">where</span></span>
+<span id="cb9-4"><a href="#cb9-4"></a>  <span class="dt">Done</span><span class="ot"> ::</span> a <span class="ot">-&gt;</span> <span class="dt">Result</span> query a</span>
+<span id="cb9-5"><a href="#cb9-5"></a>  <span class="dt">Fetch</span><span class="ot"> ::</span> query a <span class="ot">-&gt;</span> (a <span class="ot">-&gt;</span> <span class="dt">Task</span> query b) <span class="ot">-&gt;</span> <span class="dt">Result</span> query b</span></code></pre></div>
 <p>So to make a <code>Task</code> that fetches a query <code>q</code>, you need to create an <code>IO</code> action that returns a <code>Fetch q pure</code>. When doing automatic parallelisation, this allows introspecting whether a <code>Task</code> wants to do a fetch, such that independent fetches can be identified and run in parallel.</p>
 <p>But actually, since we no longer support automatic parallelisation, this type might as well be implemented like this:</p>
-<div class="sourceCode" id="cb8"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb8-1"><a href="#cb8-1"></a><span class="kw">newtype</span> <span class="dt">Task</span> query a <span class="ot">=</span> <span class="dt">Task</span> {<span class="ot"> unTask ::</span> <span class="dt">ReaderT</span> (<span class="dt">Fetch</span> query) <span class="dt">IO</span> a }</span>
-<span id="cb8-2"><a href="#cb8-2"></a></span>
-<span id="cb8-3"><a href="#cb8-3"></a><span class="kw">newtype</span> <span class="dt">Fetch</span> query <span class="ot">=</span> <span class="dt">Fetch</span> (<span class="kw">forall</span> a<span class="op">.</span> query a <span class="ot">-&gt;</span> <span class="dt">IO</span> a)</span></code></pre></div>
+<div class="sourceCode" id="cb10"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb10-1"><a href="#cb10-1"></a><span class="kw">newtype</span> <span class="dt">Task</span> query a <span class="ot">=</span> <span class="dt">Task</span> {<span class="ot"> unTask ::</span> <span class="dt">ReaderT</span> (<span class="dt">Fetch</span> query) <span class="dt">IO</span> a }</span>
+<span id="cb10-2"><a href="#cb10-2"></a></span>
+<span id="cb10-3"><a href="#cb10-3"></a><span class="kw">newtype</span> <span class="dt">Fetch</span> query <span class="ot">=</span> <span class="dt">Fetch</span> (<span class="kw">forall</span> a<span class="op">.</span> query a <span class="ot">-&gt;</span> <span class="dt">IO</span> a)</span></code></pre></div>
 <p>The <code>ReaderT</code>-based implementation turns out to be a bit faster:</p>
 <table>
 <thead>
