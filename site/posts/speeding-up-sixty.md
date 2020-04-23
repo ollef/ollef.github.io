@@ -1,8 +1,8 @@
 ---
 title: "Speeding up the Sixty compiler"
 author: Olle Fredriksson
-date: 2020-03-06
-description: Optimising Sixty, the new Sixten compiler
+date: 2020-04-23
+description: How I made the new Sixten compiler nine times faster
 image: speeding-up-sixty/9-d5bad6f606450d0a2c8926072e7b4845d982b81f-threadscope.png
 draft: true
 ---
@@ -12,24 +12,24 @@ draft: true
 I'm working on a reimplementation of [Sixten](https://github.com/ollef/sixten),
 a dependently typed programming language that supports unboxed data. The
 reimplementation currently lives in a separate repository, and is called
-[Sixty](https://github.com/ollef/sixty), though the intention is that it
-going to replace Sixten eventually.  The main reason for reimplementing it was to
-try out some implementation techniques to make the type checker faster,
+[Sixty](https://github.com/ollef/sixty), though the intention is that it going
+to replace Sixten eventually.  The main reason for doing a reimplementation is
+to try out some implementation techniques to make the type checker faster,
 inspired by András Kovács' [smalltt](https://github.com/AndrasKovacs/smalltt).
 
-In this post I'd like to show some optimisations that I did, guided by
-profiling.  I will also show the workflow and tools that I use when profiling Haskell
-code.
+In this post I'm going to show some optimisations that I implemented recently. I
+will also show the workflow and profiling tools that I use to find _what_ to
+optimise in Haskell programs such as Sixty.
 
 ## A benchmark
 
-I was curious to see how Sixty would handle programs with many modules.  The
-problem is that no one has ever written any large programs in the Sixten
-language so far.
+What set me off was that I was curious to see how Sixty would handle programs
+with many modules.  The problem is that no one has ever written any large
+programs in the Sixten language so far.
 
 As a substitute, I added a command to generate nonsense programs of a given
-size. The programs that are used in this post consist of just over 10 000 lines
-divided into 100 modules that all look like this:
+size. The programs that I use for the benchmarks in this post consist of just over
+10 000 lines divided into 100 modules that all look like this:
 
 ```haskell
 module Module60 exposing (..)
@@ -58,20 +58,21 @@ f30 = Module37.f4 -> Module24.f24
 ```
 
 Each module is about 100 lines of code, of which a third or so are newlines,
-and has thirty definitions that refer to definitions from other modules.
-The definitions are simple enough to be type checked very quickly, so the
-benchmark will make us focus our attention on parts of the compiler other than
-the type checker. I'd also like to write about the type checker itself, but
-will save that for another post.
+and has thirty definitions that refer to definitions from other modules.  The
+definitions are simple enough to be type checked very quickly, so the benchmark
+makes us focus mostly on parts of the compiler other than the type checker.
+
+I'd also like to write about the type checker itself, but will save that for
+another post.
 
 ## Profiling
 
 I use three main tools to try to identify bottlenecks and other things to improve:
 
 * [bench](http://www.haskellforall.com/2016/05/a-command-line-benchmark-tool.html)
-    is a replacement for the Unix `time` command that I use to get more reliable
-    timings, which is especially useful for comparing the speed of a program
-    before and after some change.
+    is a replacement for the Unix `time` command that I use to get more
+    reliable timings, which is especially useful for comparing the before and
+    after time of some change.
 * GHC's built-in profiling support, which gives us a detailed breakdown of where
   time is spent when running the program.
 
@@ -101,7 +102,7 @@ I use three main tools to try to identify bottlenecks and other things to improv
 
 ## Baseline and initial profiling
 
-The baseline used in this post starts on [this
+The baseline time used in this post starts on [this
 commit](https://github.com/ollef/sixty/tree/29094e006d4c88f51d744b0fd26f3e2e18af3ce0).
 
 At this point we get the following time to run `sixty check` in the 100 module project on my machine:
@@ -110,7 +111,7 @@ At this point we get the following time to run `sixty check` in the 100 module p
 |----------|--------:|
 | Baseline | 1.30 s  |
 
-Here's a flamegraph of the profiling output at this point:
+The flamegraph of the profiling output looks like this:
 
 [![](../images/speeding-up-sixty/0-29094e006d4c88f51d744b0fd26f3e2e18af3ce0.svg)](../images/speeding-up-sixty/0-29094e006d4c88f51d744b0fd26f3e2e18af3ce0.svg)
 
@@ -123,7 +124,7 @@ Here's what a run looks like in ThreadScope:
 
 [![](../images/speeding-up-sixty/0-29094e006d4c88f51d744b0fd26f3e2e18af3ce0-threadscope.png)](../images/speeding-up-sixty/0-29094e006d4c88f51d744b0fd26f3e2e18af3ce0-threadscope.png)
 
-Here's a more zoomed in ThreadScope picture:
+And here's a more zoomed in ThreadScope picture:
 
 [![](../images/speeding-up-sixty/0-29094e006d4c88f51d744b0fd26f3e2e18af3ce0-threadscope-detail.png)](../images/speeding-up-sixty/0-29094e006d4c88f51d744b0fd26f3e2e18af3ce0-threadscope-detail.png)
 
@@ -143,7 +144,8 @@ I most notably introduce the RTS option `-A50m`,
 which sets the default allocation area size used by the garbage collector to
 50 MB, instead of the default 1 MB, which means that GC can run less often,
 potentially at the cost of worse cache behaviour and memory use.  The value
-`50m` was found to be the best on my machine by experimentation.
+`50m` was found to be the sweet spot for performance on my machine by trying
+some different values.
 
 The result of this change is this:
 
@@ -152,17 +154,19 @@ The result of this change is this:
 | Baseline  | 1.30 s  |       |
 | RTS flags | 1.08 s  | -17 % |
 
-A look at the ThreadScope output shows that the change has a very noticeable
+The ThreadScope output shows that the change has a very noticeable
 effect of decreasing the number of garbage collections:
 
 [![](../images/speeding-up-sixty/1-f8d4ee7ee0d3d617c6d30401592f5639be60b14a-threadscope.png)](../images/speeding-up-sixty/1-f8d4ee7ee0d3d617c6d30401592f5639be60b14a-threadscope.png)
 
-Also note that the proportion of time used by the GC went from 20 % to 3 %.
+Also note that the proportion of time used by the GC went from 20 % to 3 %,
+which seems good to me.
 
 ## Optimisation 2: A couple of Rock library improvements
 
 [Rock](https://github.com/ollef/rock) is a library that's used to implement
-query-based compilation in Sixty. I made two improvements to it to get these timings:
+query-based compilation in Sixty. I made two improvements to, that made Sixty
+almost twice as fast:
 
 |           | Time    | Delta |
 |-----------|--------:|------:|
@@ -173,13 +177,13 @@ query-based compilation in Sixty. I made two improvements to it to get these tim
 The changes made were:
 
 * Using `IORef`s and atomic operations instead of `MVar`s:
-  Rock uses a cache, which is potentially accessed and updated from different
-  threads, to e.g. keep track of what queries have already been executed.
+  Rock uses a cache e.g. to keep track of what queries have already been executed.
+  This cache is potentially accessed and updated from different threads.
   Before this change this state was stored in an `MVar`, but since it's only
   doing fairly simple updates, the atomic operations of
   `IORef` are sufficient.
 * Being a bit more clever about the automatic parallelisation:
-  At this point in time Rock used a
+  We'll get back to this, but at this point in time Rock uses a
   [Haxl](https://github.com/facebook/Haxl)-like automatic parallelisation scheme, running
   queries done in an `Applicative` context in parallel.
   The change here is to only trigger parallel query execution if both queries
@@ -194,14 +198,18 @@ for part of the runtime, but not all of it:
 
 [![](../images/speeding-up-sixty/2-54b87689f345173dbed3510a396641cd8c5e43f2-threadscope.png)](../images/speeding-up-sixty/2-54b87689f345173dbed3510a396641cd8c5e43f2-threadscope.png)
 
+Sadly I didn't update Sixty in between the two changes, so I don't really know
+how much each one contributes.
+
 ## Optimisation 3: Manual query parallelisation
 
-To improve the parallelism, I removed the automatic parallelism support from
-the Rock library, and started doing it manually instead.
+I wasn't quite happy with the automatic parallelism since it mostly resulted in
+sequential execution. To improve on that, I removed the automatic parallelism
+support from the Rock library, and started doing it manually instead.
 
-The following results are from simply processing all input modules in parallel,
+The following timing is from processing all input modules in parallel,
 using pooling to keep the number of threads the same as the number
-of threads on the machine it's run on:
+of cores on the machine it's run on:
 
 |                          | Time    | Delta |
 |--------------------------|--------:|------:|
@@ -210,18 +218,18 @@ of threads on the machine it's run on:
 | Rock                     | 0.613 s | -43 % |
 | Manual parallelisation   | 0.451 s | -26 % |
 
-Being able to do this is an advantage of using a query-based architecture.
-The modules can be processed in any order, and any non-processed dependencies that are missing
-are processed and cached on an as-needed basis.
+Being able to do this seems to be a great advantage of using a query-based
+architecture.  The modules can be processed in any order, and any non-processed
+dependencies that are missing are processed and cached on an as-needed basis.
 
 ThreadScope shows that the CPU core utilisation is improved, even
-though the timings aren't as much better as one might expect from seeing the change:
+though the timings aren't as much better as one might expect from the image:
 
 [![](../images/speeding-up-sixty/4-7ca773e347dae952d4c7249a0310f10077a2474b-threadscope.png)](../images/speeding-up-sixty/4-7ca773e347dae952d4c7249a0310f10077a2474b-threadscope.png)
 
-It's also interesting to look at the flamegraph, because the proportion of time
-that goes to parsing has gone down to about 17 % (without having made any
-changes to the parser), which can be seen in the top-right part of the image:
+The flamegraph is also interesting, because the proportion of time
+that goes to parsing has gone down to about 17 % without having made any
+changes to the parser, which can be seen in the top-right part of the image:
 
 [![](../images/speeding-up-sixty/4-7ca773e347dae952d4c7249a0310f10077a2474b.svg)](../images/speeding-up-sixty/4-7ca773e347dae952d4c7249a0310f10077a2474b.svg)
 
@@ -247,13 +255,14 @@ term =
   <|> var              -- x
 ```
 
-These alternatives are tried in order in the parser, which means that to reach
-e.g. the `forall` case, the parser will have tried to parse the first token of
-each of the four preceding alternatives. But note that the first character of
-each alternative rules out all other cases, save for (sometimes) the `var`
-case.
+These alternatives are tried in order, which means that to reach
+e.g. the `forall` case, the parser will try to parse the first token of
+each of the four preceding alternatives.
 
-So the idea was to rewrite the parser like this:
+But note that the first character of each alternative rules out all other
+cases, save for (sometimes) the `var` case.
+
+So the idea here is to rewrite the parser like this:
 
 ```haskell
 term :: Parser Term
@@ -299,32 +308,31 @@ Not great, but it's something.
 
 ## Optimisation 5: Dependent hashmap
 
-The following flamegraph shows that at this point, around 68 % of the time goes
-to operations on
+At this point, around 68 % of the time goes to operations on
 [`Data.Dependent.Map`](https://hackage.haskell.org/package/dependent-map):
 
 [![](../images/speeding-up-sixty/5-8ea6700415f1c46fb300571382ef438ae6082e8e.svg)](../images/speeding-up-sixty/5-8ea6700415f1c46fb300571382ef438ae6082e8e.svg)
 
-Note that this was 15 % when we started out, so this has become the bottleneck
+Note that this was 15 % when we started out, so it has become the bottleneck
 only because we've fixed several others.
 
 `Data.Dependent.Map` implements a kind of dictionary data structure that allows
-the type of values depend on the value of the key, which is crucial for caching
-the result of queries, where each query may return a different type.
+the type of values depend on the key, which is crucial for caching the result
+of queries, since each query may return a different type.
 
 `Data.Dependent.Map` is implemented as a clone of `Data.Map` from the
-`containers` package, adding this kind of key-value dependency, so it's
-implemented as a binary tree and uses comparisons on the key type when doing
+`containers` package, adding this key-value dependency, so it's
+a binary tree that uses comparisons on the key type when doing
 insertions and lookups.
 
 In the flamegraph above we can also see that around 21 % of the time goes to
-comparing the `Query` type. The reason for this slowness is that queries often
-contain strings, because they're often on the form "get the type of [name]",
-and strings are slow to compare because you need to traverse at least part of
+comparing the `Query` type. The reason for this slowness is likely that queries often
+contain strings, because most are things like "get the type of [name]".
+Strings are slow to compare because you need to traverse at least part of
 the string for each comparison.
 
 It would be a better idea to use a hash map, because then the string usually
-only has to be traversed once to compute the hash, but the problem is that
+only has to be traversed once, to compute the hash, but the problem is that
 there is no _dependent_ hash map library in Haskell. Until now that is. I
 implemented a [dependent version of the standard
 `Data.HashMap`](https://github.com/ollef/dependent-hashmap) type from the
@@ -341,21 +349,21 @@ The results are as follows:
 | Dependent hashmap        | 0.257 s | -42 % |
 
 Having a look at the flamegraph after this change, we can see that `HashMap`
-operations still take about 20 % of the total run time, but also that the main
-bottleneck is now the parser:
+operations take about 20 % of the total run time which is a lot better than
+68 % even though there's still room for improvement.
+We can also see that the main bottleneck is now the parser:
 
 [![](../images/speeding-up-sixty/6-722533c5d71871ca1aa6235fe79a53f33da99c36.svg)](../images/speeding-up-sixty/6-722533c5d71871ca1aa6235fe79a53f33da99c36.svg)
 
 ## Optimisation 6: `ReaderT`-based Rock library
 
-Here's one that wasn't obvious from the profiling, but that I mostly did by
-ear.
+Here's one that wasn't obvious from the profiling that I did by ear.
 
-I mentioned that the Rock library supported automatic parallelisation, but that
-I switched to doing it manually. A remnant from that was that the `Task` type
-in Rock, was implemented in a way that made supporting that possible. `Task` is
-a monad that allows fetching and which all query rules, and therefore the whole
-Sixty compiler, are written in.
+I mentioned that the Rock library used to support automatic parallelisation,
+but that I switched to doing it manually. A remnant from that was that the
+`Task` type in Rock was implemented in a needlessly inefficient way. `Task` is
+a monad that allows fetching queries, which the whole Sixty compiler is written
+in.
 
 Before this change, `Task` was implemented roughly as follows:
 
@@ -368,12 +376,12 @@ data Result query a where
 ```
 
 So to make a `Task` that fetches a query `q`, you need to create an `IO` action
-that returns a `Fetch q pure`. When doing automatic parallelisation, this allowed
-introspecting whether a `Task` wanted to do a fetch, such that independent fetches
-could be identified and run in parallel.
+that returns a `Fetch q pure`. When doing automatic parallelisation, this allows
+introspecting whether a `Task` wants to do a fetch, such that independent fetches
+can be identified and run in parallel.
 
-But actually, since we no longer support automatic parallelisation, this type can now be
-implemented just as well as follows:
+But actually, since we no longer support automatic parallelisation, this type might
+as well be implemented like this:
 
 ```haskell
 newtype Task query a = Task { unTask :: ReaderT (Fetch query) IO a }
@@ -398,13 +406,15 @@ The `ReaderT`-based implementation turns out to be a bit faster:
 Let's have a look at the flamegraph at this point in time:
 [![](../images/speeding-up-sixty/7-048d2cec50e9994a0b159a2383580e3df5dd2a7e.svg)](../images/speeding-up-sixty/7-048d2cec50e9994a0b159a2383580e3df5dd2a7e.svg)
 
-The parser was now taking almost 30 % of the total run time.
-The parser was written using parser combinators that worked directly on characters, so
-it was also doing tokenisation on the fly. I've been wondering about the performance
-impact of this practice, since it's quite common at least in the Haskell world.
-So the change I made [here](https://github.com/ollef/sixty/commit/11c46c5b03f26a66347d5f387bd4cdfd5f6de4a2)
-was to write a lexer that's separate from the parser, and then make the parser work on the list
-of tokens that the lexer spits out.
+The parser now takes almost 30 % of the total run time.
+The parser is written using parser combinators that work directly on characters, so
+it's also doing tokenisation on the fly.
+
+I've been wondering about the performance impact of this practice, since it's
+quite common in the Haskell world.  So the change I made
+[here](https://github.com/ollef/sixty/commit/11c46c5b03f26a66347d5f387bd4cdfd5f6de4a2)
+is to write a faster lexer that's separate from the parser, and then make the
+parser work on the list of tokens that the lexer spits out.
 
 This turned out to be a great idea:
 
@@ -426,15 +436,15 @@ lookahead" step has now become a case expression on the next token, visible
 
 ## Optimisation 8: Faster hashing
 
-The flamegraph at this point contained mostly things I didn't really know what
+The flamegraph at this point contains mostly things I don't really know what
 to do with, but there's one thing left, and that's hashing of queries, which
 now takes just short of 18 % of the total runtime:
 [![](../images/speeding-up-sixty/8-11c46c5b03f26a66347d5f387bd4cdfd5f6de4a2.svg)](../images/speeding-up-sixty/8-11c46c5b03f26a66347d5f387bd4cdfd5f6de4a2.svg)
 
 The change I made
 [here](https://github.com/ollef/sixty/commit/d5bad6f606450d0a2c8926072e7b4845d982b81f)
-was to write some `Hashable` instances by hand instead of deriving them, and to
-add some inlining pragmas. This gave about a 5 % speedup:
+is to write some `Hashable` instances by hand instead of deriving them, and to
+add some inlining pragmas. This gives a 5 % speedup:
 
 |                          | Time    | Delta |
 |--------------------------|--------:|------:|
@@ -453,8 +463,9 @@ The new flamegraph shows that query hashing is now down to around 11 % of the t
 
 ## Conclusion
 
-The usual profile-before-optimising advice is good advice.  We've got great
-profiling tools for Haskell, so there's no reason to be optimising in the dark.
+We've got great profiling tools for Haskell, so there's no reason to be
+optimising in the dark.  The usual profile-before-optimising advice is good
+advice.  
 
 As a reminder, here's what the compiler looked like in ThreadScope to start with:
 
