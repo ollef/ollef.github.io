@@ -479,7 +479,18 @@
 </tr>
 </tbody>
 </table>
-<p>The "inner loop" of the parser that I tried optimising in the "Parser lookahead" step has now become a case expression on the next token, visible <a href="https://github.com/ollef/sixty/blob/11c46c5b03f26a66347d5f387bd4cdfd5f6de4a2/src/Parser.hs#L543-L581">here</a>.</p>
+<p>The "inner loop" of the parser that I tried optimising in the "Parser lookahead" step has now become a case expression on the next token, visible <a href="https://github.com/ollef/sixty/blob/11c46c5b03f26a66347d5f387bd4cdfd5f6de4a2/src/Parser.hs#L543-L581">here</a>. Essentially, it's gone from matching on characters to this:</p>
+<div class="sourceCode" id="cb11"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb11-1"><a href="#cb11-1"></a><span class="ot">term ::</span> <span class="dt">Parser</span> <span class="dt">Term</span></span>
+<span id="cb11-2"><a href="#cb11-2"></a>term <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb11-3"><a href="#cb11-3"></a>  token <span class="ot">&lt;-</span> getNextToken</span>
+<span id="cb11-4"><a href="#cb11-4"></a>  <span class="kw">case</span> token <span class="kw">of</span></span>
+<span id="cb11-5"><a href="#cb11-5"></a>    <span class="dt">Lexer.LeftParen</span> <span class="ot">-&gt;</span> parenthesizedTerm</span>
+<span id="cb11-6"><a href="#cb11-6"></a>    <span class="dt">Lexer.Let</span> <span class="ot">-&gt;</span> letExpression</span>
+<span id="cb11-7"><a href="#cb11-7"></a>    <span class="dt">Lexer.Identifier</span> ident <span class="ot">-&gt;</span> <span class="fu">pure</span> (<span class="dt">Var</span> ident)</span>
+<span id="cb11-8"><a href="#cb11-8"></a>    <span class="dt">Lexer.Case</span> <span class="ot">-&gt;</span> caseExpression</span>
+<span id="cb11-9"><a href="#cb11-9"></a>    <span class="dt">Lexer.Lambda</span> <span class="ot">-&gt;</span> lambdaExpression</span>
+<span id="cb11-10"><a href="#cb11-10"></a>    <span class="dt">Lexer.Forall</span> <span class="ot">-&gt;</span> forallExpression</span>
+<span id="cb11-11"><a href="#cb11-11"></a>    <span class="dt">Lexer.Number</span> int <span class="ot">-&gt;</span> <span class="fu">pure</span> (<span class="dt">Lit</span> int)</span></code></pre></div>
 <h2 id="optimisation-8-faster-hashing">Optimisation 8: Faster hashing</h2>
 <p>The flamegraph at this point contains mostly things I don't really know what to do with, but there's one thing left, and that's hashing of queries, which now takes just short of 18 % of the total runtime: <a href="../images/speeding-up-sixty/8-11c46c5b03f26a66347d5f387bd4cdfd5f6de4a2.svg"><img src="../images/speeding-up-sixty/8-11c46c5b03f26a66347d5f387bd4cdfd5f6de4a2.svg" /></a></p>
 <p>The change I made <a href="https://github.com/ollef/sixty/commit/d5bad6f606450d0a2c8926072e7b4845d982b81f">here</a> is to write some <code>Hashable</code> instances by hand instead of deriving them, and to add some inlining pragmas. This gives a 5 % speedup:</p>

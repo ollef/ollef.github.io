@@ -453,7 +453,21 @@ This turned out to be a great idea:
 The "inner loop" of the parser that I tried optimising in the "Parser
 lookahead" step has now become a case expression on the next token, visible
 [here](https://github.com/ollef/sixty/blob/11c46c5b03f26a66347d5f387bd4cdfd5f6de4a2/src/Parser.hs#L543-L581).
+Essentially, it's gone from matching on characters to this:
 
+```haskell
+term :: Parser Term
+term = do
+  token <- getNextToken
+  case token of
+    Lexer.LeftParen -> parenthesizedTerm
+    Lexer.Let -> letExpression
+    Lexer.Identifier ident -> pure (Var ident)
+    Lexer.Case -> caseExpression
+    Lexer.Lambda -> lambdaExpression
+    Lexer.Forall -> forallExpression
+    Lexer.Number int -> pure (Lit int)
+```
 
 ## Optimisation 8: Faster hashing
 
