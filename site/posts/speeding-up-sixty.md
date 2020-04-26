@@ -63,7 +63,7 @@ definitions are simple enough to be type checked very quickly, so the benchmark
 makes us focus mostly on other parts of the compiler.
 
 I'd also like to write about the type checker itself, but will save that for
-another post.
+other posts.
 
 ## Profiling
 
@@ -104,7 +104,7 @@ I use three main tools to try to identify bottlenecks and other things to improv
 
 We start out on [this commit](https://github.com/ollef/sixty/tree/29094e006d4c88f51d744b0fd26f3e2e18af3ce0).
 
-At this point we get the following time to run `sixty check` on the 100 module project on my machine:
+Running `sixty check` on the 100 module project on my machine gives us our baseline:
 
 |          | Time    |
 |----------|--------:|
@@ -185,19 +185,20 @@ The changes are:
   We'll get back to this, but at this point in time Rock uses a
   [Haxl](https://github.com/facebook/Haxl)-like automatic parallelisation scheme, running
   queries done in an `Applicative` context in parallel.
-  The change here is to only trigger parallel query execution if both queries
-  are not already cached.  Before this change even the cache lookup part of the
+  The change here is to only trigger parallel query execution if both sides of
+  an application of the `<*>` operator do queries that are not already cached.
+  Before this change even the cache lookup part of the
   queries was done in parallel, which is likely far too fine-grained to pay
   off.
 
 [comment]: <> ([![](../images/speeding-up-sixty/1-f8d4ee7ee0d3d617c6d30401592f5639be60b14a.svg)](../images/speeding-up-sixty/1-f8d4ee7ee0d3d617c6d30401592f5639be60b14a.svg))
 
-We can see quite clearly in ThreadScope that the parallelisation has a seemingly good effect
+We can clearly see in ThreadScope that the parallelisation has a seemingly good effect
 for part of the runtime, but not all of it:
 
 [![](../images/speeding-up-sixty/2-54b87689f345173dbed3510a396641cd8c5e43f2-threadscope.png)](../images/speeding-up-sixty/2-54b87689f345173dbed3510a396641cd8c5e43f2-threadscope.png)
 
-Sadly I didn't update Sixty in between the two changes, so I don't really know
+Unfortunately I didn't update Sixty in between the two changes, so I don't really know
 how much each one contributes.
 
 ## Optimisation 3: Manual query parallelisation
@@ -258,7 +259,7 @@ This might indicate that that part of the compiler parallelises well.
 ## Optimisation 4: Parser lookahead
 
 Here's an experiment that only helped a little. As we just saw, parsing still
-takes quite a large proportion of the total time spent, almost 17~%, so I
+takes quite a large proportion of the total time spent, almost 17 %, so I
 wanted to make it faster.
 
 The parser is written using parsing combinators, and the "inner loop" of e.g.
@@ -337,7 +338,7 @@ Note that this was 15 % when we started out, so it has become the bottleneck
 only because we've fixed several others.
 
 `Data.Dependent.Map` implements a kind of dictionary data structure that allows
-the type of values depend on the key, which is crucial for caching the result
+the type of values to depend on the key, which is crucial for caching the result
 of queries, since each query may return a different type.
 
 `Data.Dependent.Map` is implemented as a clone of `Data.Map` from the
@@ -370,20 +371,20 @@ The results are as follows:
 
 Having a look at the flamegraph after this change, we can see that `HashMap`
 operations take about 20 % of the total run time which is a lot better than
-68 % even though there's still room for improvement.
+68 % (though there's still room for improvement).
 We can also see that the main bottleneck is now the parser:
 
 [![](../images/speeding-up-sixty/6-722533c5d71871ca1aa6235fe79a53f33da99c36.svg)](../images/speeding-up-sixty/6-722533c5d71871ca1aa6235fe79a53f33da99c36.svg)
 
 ## Optimisation 6: `ReaderT`-based Rock library
 
-Here's one that wasn't obvious from the profiling that I did by ear.
+Here's one that I did by ear, since it wasn't obvious from the profiling.
 
 I mentioned that the Rock library used to support automatic parallelisation,
-but that I switched to doing it manually. A remnant from that was that the
-`Task` type in Rock was implemented in a needlessly inefficient way. `Task` is
-a monad that allows fetching queries, which the whole Sixty compiler is written
-in.
+but that I switched to doing it manually. A remnant from that is that the
+`Task` type in Rock is implemented in a needlessly inefficient way. `Task` is
+a monad that allows fetching queries, and is used throughout most of the
+Sixty compiler.
 
 Before this change, `Task` was implemented roughly as follows:
 
@@ -428,7 +429,7 @@ Let's have a look at the flamegraph at this point in time:
 
 The parser now takes almost 30 % of the total run time.
 The parser is written using parser combinators that work directly on characters, so
-it's also doing tokenisation on the fly.
+it's also doing tokenisation, or lexing, on the fly.
 
 I've been wondering about the performance impact of this practice, since it's
 quite common in the Haskell world.  So the change I made
@@ -436,7 +437,7 @@ quite common in the Haskell world.  So the change I made
 is to write a faster lexer that's separate from the parser, and then make the
 parser work on the list of tokens that the lexer spits out.
 
-This turned out to be a great idea:
+This turns out to be a great idea:
 
 |                          | Time    | Delta |
 |--------------------------|--------:|------:|
@@ -478,7 +479,7 @@ now takes just short of 18 % of the total runtime:
 The change I made
 [here](https://github.com/ollef/sixty/commit/d5bad6f606450d0a2c8926072e7b4845d982b81f)
 is to write some `Hashable` instances by hand instead of deriving them, and to
-add some inlining pragmas. This gives a 5 % speedup:
+add couple of inlining pragmas. This gives a 5 % speedup:
 
 |                          | Time    | Delta |
 |--------------------------|--------:|------:|
@@ -497,8 +498,8 @@ The new flamegraph shows that query hashing is now down to around 11 % of the t
 
 ## Conclusion
 
-I was able to make the Sixty compiler nine times faster for this benchmark.
-This was made possible by the excellent profiling tools that we have for Haskell.
+I was able to make the Sixty compiler nine times faster for this benchmark
+by using the excellent profiling tools that we have for Haskell.
 There's no reason to be optimising in the dark here.
 
 As a reminder, here's what the compiler looked like in ThreadScope to start with:
