@@ -237,7 +237,7 @@ Here are the timings:
 | Rock                     | 0.613 s | -43 % |
 | Manual parallelisation   | 0.451 s | -26 % |
 
-Being able to do type check modules in parallel on a whim this seems to be a
+Being able to type check modules in parallel on a whim like this seems to be a
 great advantage of using a query-based architecture.  The modules can be
 processed in any order, and any non-processed dependencies that are missing are
 processed and cached on an as-needed basis.

@@ -2,7 +2,7 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <title>Olle Fredriksson&#39;s blog</title>
     <link href="https://ollef.github.io/blog/atom.xml" rel="self" type="application/rss+xml" />
-  <updated>2020-04-26T13:01:56Z</updated>
+  <updated>2020-04-26T13:03:53Z</updated>
   <author>
       <name>Olle Fredriksson</name>
   </author>
@@ -201,7 +201,7 @@
 </tr>
 </tbody>
 </table>
-<p>Being able to do type check modules in parallel on a whim this seems to be a great advantage of using a query-based architecture. The modules can be processed in any order, and any non-processed dependencies that are missing are processed and cached on an as-needed basis.</p>
+<p>Being able to type check modules in parallel on a whim like this seems to be a great advantage of using a query-based architecture. The modules can be processed in any order, and any non-processed dependencies that are missing are processed and cached on an as-needed basis.</p>
 <p>ThreadScope shows that the CPU core utilisation is improved, even though the timings aren't as much better as one might expect from the image:</p>
 <p><a href="../images/speeding-up-sixty/4-7ca773e347dae952d4c7249a0310f10077a2474b-threadscope.png"><img src="../images/speeding-up-sixty/4-7ca773e347dae952d4c7249a0310f10077a2474b-threadscope.png" /></a></p>
 <p>The flamegraph is also interesting, because the proportion of time that goes to parsing has gone down to about 17 % without having made any changes to the parser, which can be seen in the top-right part of the image:</p>
