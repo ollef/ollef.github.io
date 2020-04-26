@@ -102,10 +102,9 @@ I use three main tools to try to identify bottlenecks and other things to improv
 
 ## Baseline and initial profiling
 
-The baseline time used in this post starts on [this
-commit](https://github.com/ollef/sixty/tree/29094e006d4c88f51d744b0fd26f3e2e18af3ce0).
+We start out on [this commit](https://github.com/ollef/sixty/tree/29094e006d4c88f51d744b0fd26f3e2e18af3ce0).
 
-At this point we get the following time to run `sixty check` in the 100 module project on my machine:
+At this point we get the following time to run `sixty check` on the 100 module project on my machine:
 
 |          | Time    |
 |----------|--------:|
