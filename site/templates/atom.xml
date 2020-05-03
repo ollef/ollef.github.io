@@ -10,7 +10,7 @@
 
   {{#posts}}
   <entry>
-      <title>{{siteTitle}}</title>
+      <title>{{title}}</title>
       <link href="{{baseUrl}}/{{url}}"/>
       <id>{{baseUrl}}/{{url}}</id>
       <updated>{{date}}</updated>
