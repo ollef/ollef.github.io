@@ -1,5 +1,5 @@
 ---
-title: "Speeding up the Sixty compiler"
+title: Speeding up the Sixty compiler
 author: Olle Fredriksson
 date: 2020-04-23
 description: How I made the new Sixten compiler nine times faster
