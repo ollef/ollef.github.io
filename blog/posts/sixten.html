@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en"> 
+<head profile="http://www.w3.org/2005/10/profile">
+    <meta charset="UTF-8">
+    <meta name="description" content="What the Sixten programming language is all about.">
+    <meta name="author" content="Olle Fredriksson">
+    <meta name=viewport content="width=device-width, initial-scale=1">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:site" content="@ollfredo">
+<meta name="twitter:creator" content="@ollfredo">
+<meta name="twitter:title" content="Sixten">
+    <meta name="twitter:description" content="What the Sixten programming language is all about.">
+    <meta name="twitter:image" content="https://ollef.github.io/blog/images/sixten/image.png">
+    <title>Sixten | Olle Fredriksson&#39;s blog</title>
+    <link rel="icon" type="image/png" href="/blog/images/favicon.png">
+    <link rel="stylesheet" href="/blog/css/style.css">
+    <link rel="stylesheet" href="/blog/css/syntax.css">
+</head>
+<body>
+    <header>
+        <nav>
+            <a href="/blog/">
+                Home
+            </a>
+        </nav>
+    </header>
+
+<div id="page">
+    <div class="wrapper">
+        <div class="masthead">
+            <span class="title">
+                Sixten
+            </span>
+
+            <img class="post-image" src="/blog/images/sixten/image.png">
+
+            <span class="byline">by Olle Fredriksson</span>
+
+            <span class="date">2020-05-08</span>
+
+            <div class="metadata">
+            </div>
+        </div>
+    </div>
+    <article class="post">
+        <p>Sixten is a project I've worked on for around six years now, although its design has gone through many iterations.</p>
+<h2 id="features">Features</h2>
+<h3 id="unboxed-data">Unboxed data</h3>
+<p>Something that I often find lacking in Haskell is control over the layout of data. There are loads of indirections everywhere. UnboxedSums and UnboxedTuples help, but you end up with types that are second-class and can't be used as an argument to polymorphic functions.</p>
+<p>In Sixten I want to allow specifying unboxed data in a first-class way.</p>
+<ul>
+<li>Stack allocation, lower heap allocation pressure.</li>
+</ul>
+<h3 id="optional-monomorphisation">Optional monomorphisation</h3>
+<h3 id="dependent-types">Dependent types</h3>
+<ul>
+<li>Pi types</li>
+<li>Inductive families</li>
+</ul>
+<p>Dependent types and unboxed data seem like a combination that could open up for implementing some low-level tricks safely, such as strings or arrays that are stored unboxed up to a certain size.</p>
+<h3 id="editor-support">Editor support</h3>
+<ul>
+<li>incremental compiler built on a query-based architecture.</li>
+<li>Language server built in from the start.</li>
+</ul>
+<h3 id="fast-type-checking">Fast type checking</h3>
+<ul>
+<li>smalltt</li>
+<li>variable representations</li>
+<li>gluing</li>
+<li>parallel type checking</li>
+</ul>
+<h3 id="extern-code">Extern code</h3>
+<h3 id="records">Records</h3>
+<h3 id="gc">GC</h3>
+<p>(RC to start with)</p>
+<h2 id="current-status">Current status</h2>
+    </article>
+
+</div>
+
+<footer>
+    <div class="social-links">
+        <div class="social-link-wrapper">
+            <a class="social-link" href="https://github.com/ollef">
+                <img src="/blog/images/github-logo.svg" alt="Github profile"/>
+            </a>
+        </div>
+        <div class="social-link-wrapper">
+            <a class="social-link" href="https://twitter.com/ollfredo">
+                <img src="/blog/images/twitter-logo.svg" alt="Twitter profile"/>
+            </a>
+        </div>
+    </div>
+    <div id="copyright">&copy; 2020 <a href="mailto:fredriksson.olle@gmail.com">Olle Fredriksson</a> — <a href="/blog/atom.xml">Feed</a></div>
+
+    Built using <a href="https://github.com/ChrisPenner/slick">slick</a> ❤️
+</footer>
+
+<script src="/blog/js/main.js"></script>
+</body>
+</html>
