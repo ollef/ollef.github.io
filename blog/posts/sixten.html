@@ -43,37 +43,76 @@
         </div>
     </div>
     <article class="post">
-        <p>Sixten is a project I've worked on for around six years now, although its design has gone through many iterations.</p>
-<h2 id="features">Features</h2>
-<h3 id="unboxed-data">Unboxed data</h3>
-<p>Something that I often find lacking in Haskell is control over the layout of data. There are loads of indirections everywhere. UnboxedSums and UnboxedTuples help, but you end up with types that are second-class and can't be used as an argument to polymorphic functions.</p>
-<p>In Sixten I want to allow specifying unboxed data in a first-class way.</p>
-<ul>
-<li>Stack allocation, lower heap allocation pressure.</li>
-</ul>
+        <p>Sixten is a programming language I've worked on as a hobby project for around six years now. The ideas and focus areas have crystallised and evolved over time, although it started mostly as aimless exploration.</p>
+<p>In this post I'd like to say a few words about what's special about Sixten, why I'm doing it, and what I find important to focus on when implementing programming languages.</p>
+<h2 id="unboxed-data">Unboxed data</h2>
+<p>When writing code in high-level languages I sometimes find myself missing the low-level control over the memory layout of data that languages that are "closer to the metal" give you, because it's often essential for performance to avoid heap allocations in hot spots of your programs.</p>
+<p>In Haskell you can use the UnboxedSums and UnboxedTuples extensions which allow you to write code that uses unboxed values, but these types have a kind that is not generally compatible with ordinary polymorphic types and functions, making the support feel second class.</p>
+<p>In Sixten the aim is to make the support for unboxed data first class.</p>
+<p>Concretely, the benefits of this are</p>
+<ol>
+<li>Being able to write code that doesn't do heap allocations, thus giving the programmer the tools they need to reduce garbage collection overheads.</li>
+<li>Increasing cache locality since data is packed tighter together.</li>
+<li>Saving memory wasted on indirections.</li>
+</ol>
+<h3 id="type-representation-polymorphism">Type representation polymorphism</h3>
+<p>Most high-level languages with parametrically polymorphic (or generic) data types and functions, even if it is offered under a different name like templates, fall into one of the following two categories:</p>
+<ol>
+<li><p>They use a uniform representation for polymorphic data, which is usually word-sized. If the data is bigger than a word it's represented as a pointer to the data.</p></li>
+<li><p>They use monomorphisation or template instantiation, meaning that new code is generated statically whenever a polymorphic function is used at a new type.</p></li>
+</ol>
+<p>Neither of these approaches is perfect: With the uniform representation approach we lose control over how our data is laid out in memory, and with the template instantiation approach we lose modularity and polymorphic recursion:</p>
+<p>With a uniform representation we cannot for example define polymorphic intrusive linked lists, where the node data is stored next to the list's "next pointer". Given the (Haskell) list definition</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb1-1"><a href="#cb1-1"></a><span class="kw">data</span> <span class="dt">List</span> a <span class="ot">=</span> <span class="dt">Nil</span> <span class="op">|</span> <span class="dt">Cons</span> a (<span class="dt">List</span> a)</span></code></pre></div>
+<p>The representation in memory of the list <code>Cons x (Cons y Nil)</code> in languages with a uniform representation is something like:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb2-1"><a href="#cb2-1"></a>     [x]           [y]</span>
+<span id="cb2-2"><a href="#cb2-2"></a>      <span class="op">^</span>             <span class="op">^</span></span>
+<span id="cb2-3"><a href="#cb2-3"></a>      <span class="op">|</span>             <span class="op">|</span></span>
+<span id="cb2-4"><a href="#cb2-4"></a>[<span class="dt">Cons</span> <span class="op">*</span> <span class="op">*</span>]<span class="op">---&gt;</span>[<span class="dt">Cons</span> <span class="op">*</span> <span class="op">*</span>]<span class="op">---&gt;</span>[<span class="dt">Nil</span>]</span></code></pre></div>
+<p>We cannot define a polymorphic list whose representation is intrusive:</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb3-1"><a href="#cb3-1"></a>[<span class="dt">Cons</span> x <span class="op">*</span>]<span class="op">---&gt;</span>[<span class="dt">Cons</span> y <span class="op">*</span>]<span class="op">---&gt;</span>[<span class="dt">Nil</span>]</span></code></pre></div>
+<p>What we gain from using a uniform representation is modularity: A polymorphic function, say <code>map : forall a b. (a -&gt; b) -&gt; List a -&gt; List b</code>, can be compiled once and used for any types <code>a</code> and <code>b</code>.</p>
+<p>With monomorphisation, we are able to define intrusive lists, like in the following C++-like code:</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb4-1"><a href="#cb4-1"></a><span class="kw">template</span>&lt;<span class="kw">typename</span> A&gt;</span>
+<span id="cb4-2"><a href="#cb4-2"></a><span class="kw">class</span> List</span>
+<span id="cb4-3"><a href="#cb4-3"></a>{</span>
+<span id="cb4-4"><a href="#cb4-4"></a>  A element;</span>
+<span id="cb4-5"><a href="#cb4-5"></a>  List&lt;A&gt;* next;</span>
+<span id="cb4-6"><a href="#cb4-6"></a>}</span></code></pre></div>
+<p>However, unless we know all the types that <code>A</code> will be instantiated with in advance, we have to generate new code for every instantiation of the function, meaning that we have partly lost modular compilation. We also can't have polymorphic recursion since that would require an unbounded number of instantiations. Template instantiation also leads to bigger code since it generates multiple versions of the same function.</p>
+<p>What is gained is the ability to more finely express how our data is laid out in memory, which for instance means that we can write code that is cache-aware and which uses fewer memory allocations.</p>
+<p>Sixten gives us both: it allows us to control the memory layout of our data all the while retaining modularity.</p>
+<p>A definition of the list type in Sixten is</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb5-1"><a href="#cb5-1"></a><span class="kw">data</span> <span class="dt">List</span> a <span class="ot">=</span> <span class="dt">Nil</span> <span class="op">|</span> <span class="dt">Cons</span> a (<span class="dt">Ptr</span> (<span class="dt">List</span> a))</span></code></pre></div>
+<p>The difference between Sixten and (for instance) Haskell is that everything is unboxed by default, meaning that the <code>a</code> field in the <code>Cons</code> constructor is not represented by a pointer to an <code>a</code>, but it <em>is</em> an <code>a</code>. This also means that we have to mark where we actually want pointers with the <code>Ptr</code> type constructor. The <code>Cons</code> constructor has to hold a <em>pointer to</em> the tail of the list because we would otherwise create an infinite-size datatype, which is not allowed in Sixten.</p>
+<p>The novel feature that allows this is <em>type representation polymorphism</em>. Types are compiled to their representation in Sixten. In the current implementation of Sixten the representation consists only of the type's size in memory, so e.g. <code>Int</code> is compiled to the integer <code>8</code> on a 64-bit system. A polymorphic function like <code>map : forall a b. (a -&gt; b) -&gt; List a -&gt; List b</code> implicitly takes the types <code>a</code> and <code>b</code> as arguments at runtime, and its compiled form makes use of the type representation information to calculate the memory offsets and sizes of its arguments and results that are needed to be representation polymorphic.</p>
+<p>Sixten's type representation polymorphism is closely related to research on <em>intensional polymorphism</em>. What sets Sixten apart is the way type representations are used in the compiled code. Sixten doesn't need to use type representations to perform code selection, but rather compiles polymorphic functions to <em>single</em> implementations that leverage the information in the type representation to be general enough to work for all types. Type representations are also not structural in Sixten, but consist simply of the size of the type.</p>
+<p>TODO mention Swift</p>
 <h3 id="optional-monomorphisation">Optional monomorphisation</h3>
-<h3 id="dependent-types">Dependent types</h3>
+<p>This kind of polymorphism is potentially slower than specialised functions since it passes around additional implicit arguments and does more calculation at runtime. Some of this inefficiency should be offset by having better memory layout than systems using uniform representations, meaning better cache behaviour. Also note that type representation polymorphism does not preclude creating specialised versions of functions known to be performance-critical, meaning that we can choose to use monomorphisation when we want to.</p>
+<p>TODO mention C#</p>
+<h2 id="dependent-types">Dependent types</h2>
 <ul>
 <li>Pi types</li>
 <li>Inductive families</li>
 </ul>
 <p>Dependent types and unboxed data seem like a combination that could open up for implementing some low-level tricks safely, such as strings or arrays that are stored unboxed up to a certain size.</p>
-<h3 id="editor-support">Editor support</h3>
+<p>Quote conclusion of <a href="http://www.cs.nott.ac.uk/~psztxa/publ/ydtm.pdf" class="uri">http://www.cs.nott.ac.uk/~psztxa/publ/ydtm.pdf</a></p>
+<h2 id="editor-support">Editor support</h2>
 <ul>
 <li>incremental compiler built on a query-based architecture.</li>
 <li>Language server built in from the start.</li>
 </ul>
-<h3 id="fast-type-checking">Fast type checking</h3>
+<h2 id="fast-type-checking">Fast type checking</h2>
 <ul>
 <li>smalltt</li>
 <li>variable representations</li>
 <li>gluing</li>
 <li>parallel type checking</li>
 </ul>
-<h3 id="extern-code">Extern code</h3>
-<h3 id="records">Records</h3>
-<h3 id="gc">GC</h3>
-<p>(RC to start with)</p>
+<h2 id="extern-code">Extern code</h2>
+<h2 id="records">Records</h2>
+<h2 id="gc">GC</h2>
 <h2 id="current-status">Current status</h2>
     </article>
 
