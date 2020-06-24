@@ -31,11 +31,13 @@ that some of you might have seen.
 
 In this post I will talk a about how this is achieved in [Sixten](https://github.com/ollef/sixten), an
 experimental functional programming language created to give the programmer
-more control over memory layout and boxing than traditional languages do.
+more control over memory layout and boxing than traditional languages do,
+by building the compiler around a query system.
 
 The most recent development of Sixten is being done in the
-[Sixty](https://github.com/ollef/sixty) repository.  Here's a little video
-giving a taste of what its language server can do, showing type-based completions:
+[Sixty](https://github.com/ollef/sixty) repository, and is completely
+query-based.  Here's a little video giving a taste of what its language server,
+can do, showing type-based completions:
 
 <script id="asciicast-V7rsch6mLtFPTrWmlCTAMDzcn" src="https://asciinema.org/a/V7rsch6mLtFPTrWmlCTAMDzcn.js" data-rows="12" async></script>
 
