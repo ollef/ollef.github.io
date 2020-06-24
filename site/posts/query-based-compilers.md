@@ -183,9 +183,9 @@ A problem that pops up now, however, is that there's no satisfactory type for
 `ParsedModule`, while `fetch (TypeKey "Data.List.map")` should return
 something of type `Type`.
 
-### Dependent queries
+### Indexed queries
 
-Rock allows you to index the key type
+Rock allows us to index the key type
 by the return type of the query. The `Key` type in our running example becomes
 the following
 [GADT](https://en.wikipedia.org/wiki/Generalized_algebraic_data_type):

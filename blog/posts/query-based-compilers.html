@@ -118,8 +118,8 @@
 <p>The build system has control over what code runs when you do a <code>fetch</code>, so by varying that it can do fine-grained dependency tracking, memoisation, and incremental updates.</p>
 <p><em>Build systems à la carte</em> explores what kind of build systems you get when you vary what <code>Task</code> is allowed to do, e.g. if it's a <code>Monad</code> or <code>Applicative</code>. In Rock, we're not exploring <em>that</em>, so our <code>Task</code> is a thin layer on top of <code>IO</code>.</p>
 <p>A problem that pops up now, however, is that there's no satisfactory type for <code>Value</code>. We want <code>fetch (ParsedModuleKey "Data.List")</code> to return a <code>ParsedModule</code>, while <code>fetch (TypeKey "Data.List.map")</code> should return something of type <code>Type</code>.</p>
-<h3 id="dependent-queries">Dependent queries</h3>
-<p>Rock allows you to index the key type by the return type of the query. The <code>Key</code> type in our running example becomes the following <a href="https://en.wikipedia.org/wiki/Generalized_algebraic_data_type">GADT</a>:</p>
+<h3 id="indexed-queries">Indexed queries</h3>
+<p>Rock allows us to index the key type by the return type of the query. The <code>Key</code> type in our running example becomes the following <a href="https://en.wikipedia.org/wiki/Generalized_algebraic_data_type">GADT</a>:</p>
 <div class="sourceCode" id="cb5"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb5-1"><a href="#cb5-1"></a><span class="kw">data</span> <span class="dt">Key</span> a <span class="kw">where</span></span>
 <span id="cb5-2"><a href="#cb5-2"></a>  <span class="dt">ParsedModuleKey</span><span class="ot"> ::</span> <span class="dt">ModuleName</span> <span class="ot">-&gt;</span> <span class="dt">Key</span> <span class="dt">ParsedModule</span></span>
 <span id="cb5-3"><a href="#cb5-3"></a>  <span class="dt">ResolvedModuleKey</span><span class="ot"> ::</span> <span class="dt">ModuleName</span> <span class="ot">-&gt;</span> <span class="dt">Key</span> <span class="dt">ResolvedModule</span></span>
