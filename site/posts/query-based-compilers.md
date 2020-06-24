@@ -1,7 +1,7 @@
 ---
 title: Query-based compiler architectures
 author: Olle Fredriksson
-date: 2020-05-24
+date: 2020-06-24
 description: What a query-based compiler is and what they are good for.
 image: query-based-compilers/top.png
 draft: true
