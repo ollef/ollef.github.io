@@ -1,7 +1,7 @@
 ---
 title: Query-based compiler architectures
 author: Olle Fredriksson
-date: 2020-06-24
+date: 2020-06-25
 description: What a query-based compiler is and what they are good for.
 image: query-based-compilers/top.png
 draft: true
@@ -29,14 +29,15 @@ This is what Anders Hejlsberg talks about in
 [his video on modern compiler construction](https://www.youtube.com/watch?v=wSdV1M7n4gQ)
 that some of you might have seen.
 
-In this post I will talk a about how this is achieved in [Sixten](https://github.com/ollef/sixten), an
-experimental functional programming language created to give the programmer
-more control over memory layout and boxing than traditional languages do,
+In this post I will cover a about how this is achieved in [Sixten](https://github.com/ollef/sixten)
 by building the compiler around a query system.
 
+For those of you that don't know, Sixten is an
+experimental functional programming language created to give the programmer
+more control over memory layout and boxing than traditional languages do.
 The most recent development of Sixten is being done in the
 [Sixty](https://github.com/ollef/sixty) repository, and is completely
-query-based.  Here's a little video giving a taste of what its language server,
+query-based.  Here's a little video giving a taste of what its language server
 can do, showing type-based completions:
 
 <script id="asciicast-V7rsch6mLtFPTrWmlCTAMDzcn" src="https://asciinema.org/a/V7rsch6mLtFPTrWmlCTAMDzcn.js" data-rows="12" async></script>
@@ -72,7 +73,7 @@ way we often need to read and update some state. For example, we might update a
 type table during type checking so we can later look up the type of entities
 that the code refers to.
 
-Traditional compiler pipelines are probably quite familiar to many of you, but
+Traditional compiler pipelines are probably quite familiar to many of us, but
 how query-based compilers should be architected might not be as well-known.
 Here I will describe one way to do it.
 
@@ -97,7 +98,7 @@ fetchType (QualifiedName moduleName name) = do
   inferDefinitionType definition
 ```
 
-We first find out what file the name comes from, which might be `Data/List.hs`
+We first find out what file the name comes from, which might be `Data/List.vix`
 for `Data.List`, then read the contents of the file, parse it, perhaps we do
 name resolution to find out what the names in the code refer to given what is
 imported, and last we look up the name-resolved definition and type check it,
@@ -170,13 +171,14 @@ data Key
   | TypeKey QualifiedName
 ```
 
-The build system has control over what code runs when you do a `fetch`, so by
+The build system has control over what code runs when we do a `fetch`, so by
 varying that it can do fine-grained dependency tracking, memoisation, and
 incremental updates.
 
-_Build systems à la carte_ explores what kind of build systems you get when you
-vary what `Task` is allowed to do, e.g. if it's a `Monad` or `Applicative`. In
-Rock, we're not exploring _that_, so our `Task` is a thin layer on top of `IO`.
+_Build systems à la carte_ is also about exploring what kind of build systems
+we get when we vary what `Task` is allowed to do, e.g. if it's a `Monad` or
+`Applicative`. In Rock, we're not exploring _that_, so our `Task` is a thin
+layer on top of `IO`.
 
 A problem that pops up now, however, is that there's no satisfactory type for
 `Value`.  We want `fetch (ParsedModuleKey "Data.List")` to return a
@@ -232,8 +234,8 @@ The most basic way to run a `Task` in Rock is to directly call the `rules`
 function when a `Task` fetches a key. This results in an inefficient build
 system that recomputes every query from scratch.
 
-But the `Rock` library lets you layer more functionality onto your `rules`
-function, and one thing that you can add is memoisation.  If you do that Rock
+But the `Rock` library lets us layer more functionality onto our `rules`
+function, and one thing that we can add is memoisation.  If we do that Rock
 caches the result of each fetched key by storing the key-value pairs of already
 performed fetches in a [dependent
 hashmap](https://hackage.haskell.org/package/dependent-hashmap). This way, we
@@ -244,7 +246,7 @@ perform each query at most once during a single run of the compiler.
 Another kind of functionality that can be layered onto the `rules` function is
 incremental updates. When it's used, Rock keeps a track of what dependencies a task
 used when it was executed (much like Shake) in a table, i.e.  what keys it
-fetched and what the values were, such that it's able to determine when it's
+fetched and what the values were. Using this information it's able to determine when it's
 safe to reuse the cache _from a previous run of the compiler_ even though there
 might be changes in other parts of the dependency graph.
 
@@ -255,11 +257,11 @@ same, the cache can be reused in queries that depend on the parse result.
 
 ### Reverse dependency tracking
 
-Verifying dependencies can be too slow for real-time tooling like a language
-server, because large parts of the dependency graph have to be traversed just
+Verifying dependencies can be too slow for real-time tooling like language
+servers, because large parts of the dependency graph have to be traversed just
 to check that most of it is unchanged even for tiny changes.
 
-For example, if you make changes to a source file with many large imports,
+For example, if we make changes to a source file with many large imports,
 we need to walk the dependency trees of all of the imports just to update the editor
 state for that single file.
 This is because dependency verification by itself needs to walk all the way to
@@ -290,4 +292,12 @@ any query at any time without worrying about order or temporal effects, just
 like a well-written Makefile. The system will compute or retrieve cached values
 for the query and its dependencies automatically in an incremental way.
 
-Hopefully this post will have inspired you to use a query-based compiler architecture.
+Query-based compilers are also surprisingly easy to parallelise. Since we're
+allowed to make any query at any time, and they're memoised the first time
+they're run, we can fire off queries in parallel without having to think much.
+In Sixty, the default behaviour is for all input modules to be type checked in
+parallel.
+
+
+Lastly, I hope that this post will have inspired you to use a query-based
+compiler architecture, and given you an idea of how it can be done.
