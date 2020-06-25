@@ -2,12 +2,135 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <title>Olle Fredriksson&#39;s blog</title>
     <link href="https://ollef.github.io/blog/atom.xml" rel="self" type="application/rss+xml" />
-  <updated>2020-05-08T20:08:48Z</updated>
+  <updated>2020-06-25T19:02:41Z</updated>
   <author>
       <name>Olle Fredriksson</name>
   </author>
   <id>https://ollef.github.io/blog/</id>
 
+  <entry>
+      <title>Query-based compiler architectures</title>
+      <link href="https://ollef.github.io/blog/posts/query-based-compilers.html"/>
+      <id>https://ollef.github.io/blog/posts/query-based-compilers.html</id>
+      <updated>2020-06-25</updated>
+      <summary></summary>
+      <content type="html"><![CDATA[
+          <img src="https://ollef.github.io/blog/images/query-based-compilers/top.png" alt="Query-based compiler architectures">
+              <p>Note: This is an old post originally from the documentation of the <a href="https://github.com/ollef/sixten">Sixten</a> programming language, that I've touched up and fleshed out. After the time that it was written I've found out about <a href="https://github.com/salsa-rs/salsa">Salsa</a>, a Rust library with very similar goals to my Rock library, which is definitely worth checking out as well!</p>
+<h2 id="background">Background</h2>
+<p>Compilers are no longer just black boxes that take a bunch of source files and produce assembly code. We expect them to:</p>
+<ul>
+<li>Be incremental, meaning that if we recompile a project after having made a few changes we only recompile what is affected by the changes.</li>
+<li>Provide editor tooling, e.g. through a <a href="https://langserver.org/">language server</a>, supporting functionality like going to definition, finding the type of the expression at a specific location, and showing error messages on the fly.</li>
+</ul>
+<p>This is what Anders Hejlsberg talks about in <a href="https://www.youtube.com/watch?v=wSdV1M7n4gQ">his video on modern compiler construction</a> that some of you might have seen.</p>
+<p>In this post I will cover a about how this is achieved in <a href="https://github.com/ollef/sixten">Sixten</a> by building the compiler around a query system.</p>
+<p>For those of you that don't know, Sixten is an experimental functional programming language created to give the programmer more control over memory layout and boxing than traditional languages do. The most recent development of Sixten is being done in the <a href="https://github.com/ollef/sixty">Sixty</a> repository, and is completely query-based. Here's a little video giving a taste of what its language server can do, showing type-based completions:</p>
+<script id="asciicast-V7rsch6mLtFPTrWmlCTAMDzcn" src="https://asciinema.org/a/V7rsch6mLtFPTrWmlCTAMDzcn.js" data-rows="12" async></script>
+<h2 id="traditional-pipeline-based-compiler-architectures">Traditional pipeline-based compiler architectures</h2>
+<p>A traditional compiler pipeline might look a bit like this:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode md"><code class="sourceCode markdown"><span id="cb1-1"><a href="#cb1-1"></a>+-----------+            +-----+                +--------+               +--------+</span>
+<span id="cb1-2"><a href="#cb1-2"></a>|           |            |     |                |        |               |        |</span>
+<span id="cb1-3"><a href="#cb1-3"></a>|source text|---parse---&gt;| AST |---typecheck-+-&gt;|core AST|---generate---&gt;|assembly|</span>
+<span id="cb1-4"><a href="#cb1-4"></a>|           |            |     |       ^        |        |               |        |</span>
+<span id="cb1-5"><a href="#cb1-5"></a>+-----------+            +-----+       |        +--------+               +---------</span>
+<span id="cb1-6"><a href="#cb1-6"></a>                                       |</span>
+<span id="cb1-7"><a href="#cb1-7"></a>                                 read and write</span>
+<span id="cb1-8"><a href="#cb1-8"></a>                                     types</span>
+<span id="cb1-9"><a href="#cb1-9"></a>                                       |</span>
+<span id="cb1-10"><a href="#cb1-10"></a>                                       v</span>
+<span id="cb1-11"><a href="#cb1-11"></a>                                  +----------+</span>
+<span id="cb1-12"><a href="#cb1-12"></a>                                  |          |</span>
+<span id="cb1-13"><a href="#cb1-13"></a>                                  |type table|</span>
+<span id="cb1-14"><a href="#cb1-14"></a>                                  |          |</span>
+<span id="cb1-15"><a href="#cb1-15"></a>                                  +----------+</span></code></pre></div>
+<p>There are many variations, and often more steps and intermediate representations than in the illustration, but the idea stays the same:</p>
+<p>We push source text down a pipeline and run a fixed set of transformations until we finally output assembly code or some other target language. Along the way we often need to read and update some state. For example, we might update a type table during type checking so we can later look up the type of entities that the code refers to.</p>
+<p>Traditional compiler pipelines are probably quite familiar to many of us, but how query-based compilers should be architected might not be as well-known. Here I will describe one way to do it.</p>
+<h2 id="going-from-pipeline-to-queries">Going from pipeline to queries</h2>
+<p>What does it take to get the type of a qualified name, such as <code>"Data.List.map"</code>? In a pipeline-based architecture we would just look it up in the type table. With queries, we have to think differently. Instead of relying on having updated some piece of state, we do it as if it was done from scratch.</p>
+<p>As a first iteration, we do it <em>completely</em> from scratch. It might look a little bit like this:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb2-1"><a href="#cb2-1"></a><span class="ot">fetchType ::</span> <span class="dt">QualifiedName</span> <span class="ot">-&gt;</span> <span class="dt">IO</span> <span class="dt">Type</span></span>
+<span id="cb2-2"><a href="#cb2-2"></a>fetchType (<span class="dt">QualifiedName</span> moduleName name) <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb2-3"><a href="#cb2-3"></a>  fileName <span class="ot">&lt;-</span> moduleFileName moduleName</span>
+<span id="cb2-4"><a href="#cb2-4"></a>  sourceCode <span class="ot">&lt;-</span> <span class="fu">readFile</span> fileName</span>
+<span id="cb2-5"><a href="#cb2-5"></a>  parsedModule <span class="ot">&lt;-</span> parseModule sourceCode</span>
+<span id="cb2-6"><a href="#cb2-6"></a>  resolvedModule <span class="ot">&lt;-</span> resolveNames parsedModule</span>
+<span id="cb2-7"><a href="#cb2-7"></a>  <span class="kw">let</span> definition <span class="ot">=</span> <span class="fu">lookup</span> name resolvedModule</span>
+<span id="cb2-8"><a href="#cb2-8"></a>  inferDefinitionType definition</span></code></pre></div>
+<p>We first find out what file the name comes from, which might be <code>Data/List.vix</code> for <code>Data.List</code>, then read the contents of the file, parse it, perhaps we do name resolution to find out what the names in the code refer to given what is imported, and last we look up the name-resolved definition and type check it, returning its type.</p>
+<p>All this for just for getting the type of an identifier? It seems ridiculous because looking up the type of a name is something we'll do loads of times during the type checking of a module. Luckily we're not done yet.</p>
+<p>Let's first refactor the code into smaller functions:</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb3-1"><a href="#cb3-1"></a><span class="ot">fetchParsedModule ::</span> <span class="dt">ModuleName</span> <span class="ot">-&gt;</span> <span class="dt">IO</span> <span class="dt">ParsedModule</span></span>
+<span id="cb3-2"><a href="#cb3-2"></a>fetchParsedModule moduleName <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb3-3"><a href="#cb3-3"></a>  fileName <span class="ot">&lt;-</span> moduleFileName moduleName</span>
+<span id="cb3-4"><a href="#cb3-4"></a>  sourceCode <span class="ot">&lt;-</span> <span class="fu">readFile</span> fileName</span>
+<span id="cb3-5"><a href="#cb3-5"></a>  parseModule moduleName</span>
+<span id="cb3-6"><a href="#cb3-6"></a></span>
+<span id="cb3-7"><a href="#cb3-7"></a><span class="ot">fetchResolvedModule ::</span> <span class="dt">ModuleName</span> <span class="ot">-&gt;</span> <span class="dt">IO</span> <span class="dt">ResolvedModule</span></span>
+<span id="cb3-8"><a href="#cb3-8"></a>fetchResolvedModule moduleName <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb3-9"><a href="#cb3-9"></a>  parsedModule <span class="ot">&lt;-</span> fetchParsedModule moduleName</span>
+<span id="cb3-10"><a href="#cb3-10"></a>  resolveNames parsedModule</span>
+<span id="cb3-11"><a href="#cb3-11"></a></span>
+<span id="cb3-12"><a href="#cb3-12"></a><span class="ot">fetchType ::</span> <span class="dt">QualifiedName</span> <span class="ot">-&gt;</span> <span class="dt">IO</span> <span class="dt">Type</span></span>
+<span id="cb3-13"><a href="#cb3-13"></a>fetchType (<span class="dt">QualifiedName</span> moduleName name) <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb3-14"><a href="#cb3-14"></a>  resolvedModule <span class="ot">&lt;-</span> fetchResolvedModule moduleName</span>
+<span id="cb3-15"><a href="#cb3-15"></a>  <span class="kw">let</span> definition <span class="ot">=</span> <span class="fu">lookup</span> name resolvedModule</span>
+<span id="cb3-16"><a href="#cb3-16"></a>  inferDefinitionType definition</span></code></pre></div>
+<p>Note that each of the functions do everything from scratch on their own, i.e. they're each doing a (longer and longer) prefix of the work you'd do in a pipeline. I've found this to be a common pattern in my query-based compilers.</p>
+<p>One way to make this efficient would be to add a memoisation layer around each function. That way, we do some expensive work the first time we invoke a function with a specific argument, but subsequent calls are cheap as they can return the cached result.</p>
+<p>This is essentially what we'll do, but we won't use a separate cache per function, but instead have a central cache, indexed by the query. This functionality is provided by <a href="https://github.com/ollef/rock">Rock</a>, a library that packages up some functionality for creating query-based compilers.</p>
+<h2 id="the-rock-library">The Rock library</h2>
+<p><a href="https://github.com/ollef/rock">Rock</a> is an experimental library heavily inspired by <a href="https://github.com/ndmitchell/shake">Shake</a> and the <a href="https://www.microsoft.com/en-us/research/publication/build-systems-la-carte/">Build systems à la carte paper</a>. It essentially implements a build system framework, like <code>make</code>.</p>
+<p>Build systems have a lot in common with modern compilers since we want them to be incremental, i.e. to take advantage of previous build results when building anew with few changes. But there's also a difference: Most build systems don't care about the <em>types</em> of their queries since they work at the level of files and file systems.</p>
+<p><em>Build systems à la carte</em> is closer to what we want. There the user writes a bunch of computations, <em>tasks</em>, choosing a suitable type for keys and a type for values. The tasks are formulated assuming they're run in an environment where there is a function <code>fetch</code> of type <code>Key -&gt; Task Value</code>, where <code>Task</code> is a type for describing build system rules, that can be used to fetch the value of a dependency with a specific key. In our above example, the key type might look like this:</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb4-1"><a href="#cb4-1"></a><span class="kw">data</span> <span class="dt">Key</span></span>
+<span id="cb4-2"><a href="#cb4-2"></a>  <span class="ot">=</span> <span class="dt">ParsedModuleKey</span> <span class="dt">ModuleName</span></span>
+<span id="cb4-3"><a href="#cb4-3"></a>  <span class="op">|</span> <span class="dt">ResolvedModuleKey</span> <span class="dt">ModuleName</span></span>
+<span id="cb4-4"><a href="#cb4-4"></a>  <span class="op">|</span> <span class="dt">TypeKey</span> <span class="dt">QualifiedName</span></span></code></pre></div>
+<p>The build system has control over what code runs when we do a <code>fetch</code>, so by varying that it can do fine-grained dependency tracking, memoisation, and incremental updates.</p>
+<p><em>Build systems à la carte</em> is also about exploring what kind of build systems we get when we vary what <code>Task</code> is allowed to do, e.g. if it's a <code>Monad</code> or <code>Applicative</code>. In Rock, we're not exploring <em>that</em>, so our <code>Task</code> is a thin layer on top of <code>IO</code>.</p>
+<p>A problem that pops up now, however, is that there's no satisfactory type for <code>Value</code>. We want <code>fetch (ParsedModuleKey "Data.List")</code> to return a <code>ParsedModule</code>, while <code>fetch (TypeKey "Data.List.map")</code> should return something of type <code>Type</code>.</p>
+<h3 id="indexed-queries">Indexed queries</h3>
+<p>Rock allows us to index the key type by the return type of the query. The <code>Key</code> type in our running example becomes the following <a href="https://en.wikipedia.org/wiki/Generalized_algebraic_data_type">GADT</a>:</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb5-1"><a href="#cb5-1"></a><span class="kw">data</span> <span class="dt">Key</span> a <span class="kw">where</span></span>
+<span id="cb5-2"><a href="#cb5-2"></a>  <span class="dt">ParsedModuleKey</span><span class="ot"> ::</span> <span class="dt">ModuleName</span> <span class="ot">-&gt;</span> <span class="dt">Key</span> <span class="dt">ParsedModule</span></span>
+<span id="cb5-3"><a href="#cb5-3"></a>  <span class="dt">ResolvedModuleKey</span><span class="ot"> ::</span> <span class="dt">ModuleName</span> <span class="ot">-&gt;</span> <span class="dt">Key</span> <span class="dt">ResolvedModule</span></span>
+<span id="cb5-4"><a href="#cb5-4"></a>  <span class="dt">TypeKey</span><span class="ot"> ::</span> <span class="dt">QualifiedName</span> <span class="ot">-&gt;</span> <span class="dt">Key</span> <span class="dt">Type</span></span></code></pre></div>
+<p>The <code>fetch</code> function gets the type <code>forall a. Key a -&gt; Task a</code>, so we get a <code>ParsedModule</code> when we run <code>fetch (ParsedModuleKey "Data.List")</code>, like we wanted, because the return type depends on the key we use.</p>
+<p>Now that we know what <code>fetch</code> should look like, it's also worth revealing what the <code>Task</code> type looks like in Rock, more concretely. As mentioned, it's a thin layer around <code>IO</code>, providing a way to <code>fetch</code> <code>key</code>s (like <code>Key</code> above):</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb6-1"><a href="#cb6-1"></a><span class="kw">newtype</span> <span class="dt">Task</span> key a <span class="ot">=</span> <span class="dt">Task</span> {<span class="ot"> unTask ::</span> <span class="dt">ReaderT</span> (<span class="dt">Fetch</span> key) <span class="dt">IO</span> a }</span>
+<span id="cb6-2"><a href="#cb6-2"></a><span class="kw">newtype</span> <span class="dt">Fetch</span> key <span class="ot">=</span> <span class="dt">Fetch</span> (<span class="kw">forall</span> a<span class="op">.</span> key a <span class="ot">-&gt;</span> <span class="dt">IO</span> a)</span></code></pre></div>
+<p>The rules of our compiler, i.e. its "Makefile", then becomes the following function, reusing the functions from above:</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb7-1"><a href="#cb7-1"></a><span class="ot">rules ::</span> <span class="dt">Key</span> a <span class="ot">-&gt;</span> <span class="dt">Task</span> a</span>
+<span id="cb7-2"><a href="#cb7-2"></a>rules key <span class="ot">=</span> <span class="kw">case</span> key <span class="kw">of</span></span>
+<span id="cb7-3"><a href="#cb7-3"></a>  <span class="dt">ParsedModuleKey</span> moduleName <span class="ot">-&gt;</span></span>
+<span id="cb7-4"><a href="#cb7-4"></a>    fetchParsedModule moduleName</span>
+<span id="cb7-5"><a href="#cb7-5"></a></span>
+<span id="cb7-6"><a href="#cb7-6"></a>  <span class="dt">ResolvedModuleKey</span> moduleName <span class="ot">-&gt;</span></span>
+<span id="cb7-7"><a href="#cb7-7"></a>    fetchResolvedModule moduleName</span>
+<span id="cb7-8"><a href="#cb7-8"></a></span>
+<span id="cb7-9"><a href="#cb7-9"></a>  <span class="dt">TypeKey</span> qualifiedName <span class="ot">-&gt;</span></span>
+<span id="cb7-10"><a href="#cb7-10"></a>    fetchType qualifiedName</span></code></pre></div>
+<h3 id="caching">Caching</h3>
+<p>The most basic way to run a <code>Task</code> in Rock is to directly call the <code>rules</code> function when a <code>Task</code> fetches a key. This results in an inefficient build system that recomputes every query from scratch.</p>
+<p>But the <code>Rock</code> library lets us layer more functionality onto our <code>rules</code> function, and one thing that we can add is memoisation. If we do that Rock caches the result of each fetched key by storing the key-value pairs of already performed fetches in a <a href="https://hackage.haskell.org/package/dependent-hashmap">dependent hashmap</a>. This way, we perform each query at most once during a single run of the compiler.</p>
+<h3 id="verifying-dependencies-and-reusing-state">Verifying dependencies and reusing state</h3>
+<p>Another kind of functionality that can be layered onto the <code>rules</code> function is incremental updates. When it's used, Rock keeps a track of what dependencies a task used when it was executed (much like Shake) in a table, i.e. what keys it fetched and what the values were. Using this information it's able to determine when it's safe to reuse the cache <em>from a previous run of the compiler</em> even though there might be changes in other parts of the dependency graph.</p>
+<p>This fine-grained dependency tracking also allows reusing the cache when a dependency of a task changes in a way that has no effect. For example, whitespace changes might trigger a re-parse, but since the AST is the same, the cache can be reused in queries that depend on the parse result.</p>
+<h3 id="reverse-dependency-tracking">Reverse dependency tracking</h3>
+<p>Verifying dependencies can be too slow for real-time tooling like language servers, because large parts of the dependency graph have to be traversed just to check that most of it is unchanged even for tiny changes.</p>
+<p>For example, if we make changes to a source file with many large imports, we need to walk the dependency trees of all of the imports just to update the editor state for that single file. This is because dependency verification by itself needs to walk all the way to the root queries for all the dependencies of a given query, which can often be a large proportion of the whole dependency tree.</p>
+<p>To fix this, Rock can also be made to track <em>reverse</em> dependencies between queries. When e.g. a language server detects that a single file has changed, the reverse dependency tree is used invalidate the cache just for the queries that depend on that file by walking the reverse dependencies starting from the changed file.</p>
+<p>Since the imported modules don't depend on that file, they don't need re-checked, resulting in much snappier tooling!</p>
+<h2 id="closing-thoughts">Closing thoughts</h2>
+<p>Most modern languages need to have a strategy for tooling, and building compilers around query systems seems like an extremely promising approach to me.</p>
+<p>With queries the compiler writer doesn't have to handle updates to and invalidation of a bunch of ad-hoc caches, which can be the result when adding incremental updates to a traditional compiler pipeline. In a query-based system it's all handled centrally once and for all, which means there's less of a chance it's wrong.</p>
+<p>Queries are excellent for tooling because they allow us to ask for the value of any query at any time without worrying about order or temporal effects, just like a well-written Makefile. The system will compute or retrieve cached values for the query and its dependencies automatically in an incremental way.</p>
+<p>Query-based compilers are also surprisingly easy to parallelise. Since we're allowed to make any query at any time, and they're memoised the first time they're run, we can fire off queries in parallel without having to think much. In Sixty, the default behaviour is for all input modules to be type checked in parallel.</p>
+<p>Lastly, I hope that this post will have inspired you to use a query-based compiler architecture, and given you an idea of how it can be done.</p>
+      ]]></content>
+      </entry>
   <entry>
       <title>Speeding up the Sixty compiler</title>
       <link href="https://ollef.github.io/blog/posts/speeding-up-sixty.html"/>

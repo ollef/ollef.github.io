@@ -4,7 +4,7 @@ author: Olle Fredriksson
 date: 2020-06-25
 description: What a query-based compiler is and what they are good for.
 image: query-based-compilers/top.png
-draft: true
+draft: false
 
 ---
 
