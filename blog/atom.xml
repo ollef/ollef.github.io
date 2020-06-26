@@ -2,7 +2,7 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <title>Olle Fredriksson&#39;s blog</title>
     <link href="https://ollef.github.io/blog/atom.xml" rel="self" type="application/rss+xml" />
-  <updated>2020-06-25T19:02:41Z</updated>
+  <updated>2020-06-26T13:38:54Z</updated>
   <author>
       <name>Olle Fredriksson</name>
   </author>
@@ -24,7 +24,7 @@
 <li>Provide editor tooling, e.g. through a <a href="https://langserver.org/">language server</a>, supporting functionality like going to definition, finding the type of the expression at a specific location, and showing error messages on the fly.</li>
 </ul>
 <p>This is what Anders Hejlsberg talks about in <a href="https://www.youtube.com/watch?v=wSdV1M7n4gQ">his video on modern compiler construction</a> that some of you might have seen.</p>
-<p>In this post I will cover a about how this is achieved in <a href="https://github.com/ollef/sixten">Sixten</a> by building the compiler around a query system.</p>
+<p>In this post I will cover how this is achieved in <a href="https://github.com/ollef/sixten">Sixten</a> by building the compiler around a query system.</p>
 <p>For those of you that don't know, Sixten is an experimental functional programming language created to give the programmer more control over memory layout and boxing than traditional languages do. The most recent development of Sixten is being done in the <a href="https://github.com/ollef/sixty">Sixty</a> repository, and is completely query-based. Here's a little video giving a taste of what its language server can do, showing type-based completions:</p>
 <script id="asciicast-V7rsch6mLtFPTrWmlCTAMDzcn" src="https://asciinema.org/a/V7rsch6mLtFPTrWmlCTAMDzcn.js" data-rows="12" async></script>
 <h2 id="traditional-pipeline-based-compiler-architectures">Traditional pipeline-based compiler architectures</h2>

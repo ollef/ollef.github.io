@@ -29,7 +29,7 @@ This is what Anders Hejlsberg talks about in
 [his video on modern compiler construction](https://www.youtube.com/watch?v=wSdV1M7n4gQ)
 that some of you might have seen.
 
-In this post I will cover a about how this is achieved in [Sixten](https://github.com/ollef/sixten)
+In this post I will cover how this is achieved in [Sixten](https://github.com/ollef/sixten)
 by building the compiler around a query system.
 
 For those of you that don't know, Sixten is an
