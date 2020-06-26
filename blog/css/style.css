@@ -144,6 +144,7 @@ img {
 a,
 a:visited,
 a:hover {
+  text-decoration: underline;
   color: inherit;
 }
 
