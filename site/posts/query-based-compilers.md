@@ -264,7 +264,7 @@ to check that most of it is unchanged even for tiny changes.
 For example, if we make changes to a source file with many large imports,
 we need to walk the dependency trees of all of the imports just to update the editor
 state for that single file.
-This is because dependency verification by itself needs to walk all the way to
+This is because dependency verification by itself needs to go all the way to
 the root queries for all the dependencies of a given query, which can often be
 a large proportion of the whole dependency tree.
 
