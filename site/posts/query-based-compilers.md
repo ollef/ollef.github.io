@@ -244,7 +244,7 @@ perform each query at most once during a single run of the compiler.
 ### Verifying dependencies and reusing state
 
 Another kind of functionality that can be layered onto the `rules` function is
-incremental updates. When it's used, Rock keeps a track of what dependencies a task
+incremental updates. When it's used, Rock keeps track of what dependencies a task
 used when it was executed (much like Shake) in a table, i.e.  what keys it
 fetched and what the values were. Using this information it's able to determine when it's
 safe to reuse the cache _from a previous run of the compiler_ even though there
