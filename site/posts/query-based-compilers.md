@@ -270,7 +270,7 @@ a large proportion of the whole dependency tree.
 
 To fix this, Rock can also be made to track _reverse_ dependencies between queries.
 When e.g. a language server detects that a single file has changed, the reverse
-dependency tree is used invalidate the cache just for the queries that depend
+dependency tree is used to invalidate the cache just for the queries that depend
 on that file by walking the reverse dependencies starting from the changed file.
 
 Since the imported modules don't depend on that file, they don't need re-checked, resulting

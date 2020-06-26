@@ -148,7 +148,7 @@
 <h3 id="reverse-dependency-tracking">Reverse dependency tracking</h3>
 <p>Verifying dependencies can be too slow for real-time tooling like language servers, because large parts of the dependency graph have to be traversed just to check that most of it is unchanged even for tiny changes.</p>
 <p>For example, if we make changes to a source file with many large imports, we need to walk the dependency trees of all of the imports just to update the editor state for that single file. This is because dependency verification by itself needs to go all the way to the root queries for all the dependencies of a given query, which can often be a large proportion of the whole dependency tree.</p>
-<p>To fix this, Rock can also be made to track <em>reverse</em> dependencies between queries. When e.g. a language server detects that a single file has changed, the reverse dependency tree is used invalidate the cache just for the queries that depend on that file by walking the reverse dependencies starting from the changed file.</p>
+<p>To fix this, Rock can also be made to track <em>reverse</em> dependencies between queries. When e.g. a language server detects that a single file has changed, the reverse dependency tree is used to invalidate the cache just for the queries that depend on that file by walking the reverse dependencies starting from the changed file.</p>
 <p>Since the imported modules don't depend on that file, they don't need re-checked, resulting in much snappier tooling!</p>
 <h2 id="closing-thoughts">Closing thoughts</h2>
 <p>Most modern languages need to have a strategy for tooling, and building compilers around query systems seems like an extremely promising approach to me.</p>
