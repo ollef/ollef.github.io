@@ -34,7 +34,7 @@ by building the compiler around a query system.
 
 For those of you that don't know, Sixten is an
 experimental functional programming language created to give the programmer
-more control over memory layout and boxing than traditional languages do.
+more control over memory layout and boxing than most other high-level languages do.
 The most recent development of Sixten is being done in the
 [Sixty](https://github.com/ollef/sixty) repository, and is completely
 query-based.  Here's a little video giving a taste of what its language server
